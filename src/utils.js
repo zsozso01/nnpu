@@ -120,6 +120,44 @@ function injectCss(css) {
   $("<style></style>").html(css).appendTo("head");
 }
 
+// Waits for an element to appear in asynchronously rendered DOMs.
+function waitForElement(selector, options = {}) {
+  const {
+    root = document,
+    timeoutMs = 15000,
+  } = options;
+
+  return new Promise(resolve => {
+    const initial = root.querySelector(selector);
+    if (initial) {
+      resolve(initial);
+      return;
+    }
+
+    let timeoutId;
+    const observer = new MutationObserver(() => {
+      const element = root.querySelector(selector);
+      if (element) {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        observer.disconnect();
+        resolve(element);
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+
+    timeoutId = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+  });
+}
+
 // Parses a subject code that is in parentheses at the end of a string
 function parseSubjectCode(source) {
   const str = source.trim();
@@ -189,6 +227,7 @@ module.exports = {
   deepGetProp,
   deepSetProp,
   injectCss,
+  waitForElement,
   parseSubjectCode,
   isPassingGrade,
   isFailingGrade,

@@ -1,7 +1,7 @@
 {
-  "name": "npu",
-  "version": "2.4.1",
-  "description": "Felturbózza a Neptun-odat",
+  "name": "nnpu",
+  "version": "2.6.1",
+  "description": "New Neptun PowerUp (nnpu) - Angular Neptun kiegészítő",
   "main": "npu.user.js",
   "scripts": {
     "start": "webpack-cli --watch",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/solymosi/npu.git"
+    "url": "git+https://github.com/zsozso01/nnpu.git"
   },
   "author": "Mate Solymosi",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/solymosi/npu/issues"
+    "url": "https://github.com/zsozso01/nnpu/issues"
   },
-  "homepage": "https://github.com/solymosi/npu#readme",
+  "homepage": "https://github.com/zsozso01/nnpu#readme",
   "devDependencies": {
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^8.10.0",

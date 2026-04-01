@@ -36,7 +36,7 @@ function initKeepSession() {
     if ($("#npuStatus").size() === 0) {
       $("#upTraining_lblRemainingTime").html(
         `<span id="npuStatus" style="font-weight: normal">` +
-          `<a href="https://github.com/solymosi/npu" target="_blank">Neptun PowerUp!</a> ` +
+          `<a href="https://github.com/zsozso01/nnpu" target="_blank">New Neptun PowerUp</a> ` +
           `v${GM.info.script.version}` +
           `</span>`
       );

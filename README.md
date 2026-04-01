@@ -1,27 +1,25 @@
-Neptun PowerUp!
+New Neptun PowerUp
 ===============
 
-Ez a **Neptun PowerUp!** hivatalos oldala.
+Ez a **New Neptun PowerUp** (röviden **nnpu**) hivatalos oldala.
 
 A program **felturbózza a Neptun-odat**: gyorsabb tárgy- és vizsgafelvétel, kidobás elleni védelem, automatikus belépés, könnyebben kezelhető felület, tárolható belépési adatok, és még sok más. 25 egyetem és főiskola **több mint 15 ezer** diákjának életét könnyíti meg már 2011 óta.
 
-> [!CAUTION]
-> **A Neptun PowerUp! a jelen formájában nem fog tovább működni 😢**
+> [!WARNING]
+> **A New Neptun PowerUp jelenleg aktív fejlesztés alatt áll.**
 >
-> A Neptun nemrég bevezetett egy **új felhasználói felületet**, amely teljesen máshogy működik, mint a régi. Néhány egyetem már most bevezette az új felületet, és arra lehet számítani, hogy záros határidőn belül mindenhol csak az új felület lesz elérhető.
->
-> A Neptun PowerUp! **a régi felületre lett fejlesztve, így csak azzal kompatibilis**. Ahhoz, hogy az új felületen is működjön, szinte az összes modult a újra kellene írni. Ez sajnos jóval több időt és erőforrást igényelne tőlem, mint amennyit a projektre jelenleg rá tudok szánni 😕.
->
-> A Neptun PowerUp! legelső verzióját 2011-ben tettem közzé, nem sokkal azután, hogy felvettek a Corvinus-ra. Három évvel később, 2014-ben lediplomáztam és kiköltöztem külföldre, így az elmúlt 10 évben nem volt aktív jogviszonyom magyar egyetemen. Ennek ellenére továbbra is rendszeresen időt szántam arra, hogy még ha a Neptun PowerUp! nem is kap új funkciókat, de legalább a meglévők működőképesek és hibamentesek maradjanak. Ehhez többen is jelentősen hozzájárultak pull request-ekkel és community support-tal, akiknek ezúton is köszönöm a segítségét.
->
-> A jelenlegi helyzetben viszont a projekt fennmaradását csak abban az esetben látom lehetségesnek, ha valaki átveszi tőlem a fejlesztést, és újraírja a szkriptet, hogy az új Neptun felületen is működjön. Ennek hiányában **a projekt 2024 végén archiválásra fog kerülni**.
+> Az új Angular-alapú Neptun felület támogatása folyamatosan készül, ezért egyes funkciók még változhatnak, hiányozhatnak vagy hibásan működhetnek. Használat közben számíts kisebb-nagyobb bugokra, és kérjük jelentsd őket a projekt issue oldalán: [github.com/zsozso01/nnpu/issues](https://github.com/zsozso01/nnpu/issues).
+
+Ez a projekt most **új kezekben fejlődik tovább**, azzal a céllal, hogy a Neptun új felületéhez is legyen egy modern, aktívan karbantartott és hosszú távon használható userscript.
+
+Külön köszönet jár az eredeti projektnek és fenntartójának: [github.com/solymosi/npu](https://github.com/solymosi/npu). Az elmúlt évek verzióinak karbantartásáért, a közösség támogatásáért és azért, hogy egy jól használható kiindulási alapot biztosított ehhez az újrakezdéshez, köszönettel tartozunk.
 
 ## Legújabb verzió
 
-* Legfrissebb verzió: **2.4.1**
-* Kiadás dátuma: **2024. augusztus 23.**
+* Legfrissebb verzió: **2.6.1**
+* Kiadás dátuma: **2026. április 1.**
 
-Ha tudod, mit csinálsz, [kattints ide a telepítéshez](https://github.com/solymosi/npu/releases/latest/download/npu.user.js).<br>
+Ha tudod, mit csinálsz, [kattints ide a telepítéshez](https://github.com/zsozso01/nnpu/releases/latest/download/npu.user.js).<br>
 Egyébként olvasd el lent a telepítési útmutatót.
 
 ## Telepítés
@@ -36,7 +34,7 @@ A telepítéssel elfogadod a [használat feltételeit](#licensz) és az [adatvé
     * [Opera](https://addons.opera.com/en/extensions/details/tampermonkey-beta)
     * [Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
 1. _Chrome, Opera és Edge alatt:_ [kapcsold be a fejlesztői módot](https://www.tampermonkey.net/faq.php#Q209) a beállításokban.
-1. Most már telepítheted a Neptun PowerUp! szkriptet. Ehhez [kattints ide](https://github.com/solymosi/npu/releases/latest/download/npu.user.js).
+1. Most már telepítheted a New Neptun PowerUp szkriptet. Ehhez [kattints ide](https://github.com/zsozso01/nnpu/releases/latest/download/npu.user.js).
 1. A megjelenő oldalon kattints az **Install** gombra.
 1. Lépj be a Neptun-ra, és használd egészséggel.
 
@@ -111,6 +109,12 @@ A Neptun fejléce alapesetben a képernyő harmadát elfoglalja, ami kis képern
 Eleged van abból, hogy minden egyes alkalommal be kell állítanod, hogy 500 elemet akarsz látni egy oldalon a 20 helyett? A Neptun PowerUp! automatikusan 500 elemet jelenít meg minden listában, és eltünteti az oldalméret-választó menüt.
 
 ## Újdonságok
+
+#### 2026. április 1.
+
+* **Újdonság:** A projekt mostantól New Neptun PowerUp néven, új karbantartás alatt fejlődik tovább az Angular-alapú Neptun felület támogatására.
+* **Újdonság:** A bejelentkezési oldalon mostantól jól látható NNPU aktivitásjelző jelenik meg, valamint a footer verziószöveg is kiegészül.
+* **Fejlődés:** A dokumentáció frissült az új fejlesztési iránnyal, a hibabejelentési folyamattal és az eredeti projekt megérdemelt elismerésével.
 
 #### 2024. augusztus 23.
 
@@ -346,6 +350,29 @@ Eleged van abból, hogy minden egyes alkalommal be kell állítanod, hogy 500 el
 #### 2011. szeptember 14.
 
 * **Javítva:** Az előző verzió bizonyos esetekben felesleges lekéréseket küldött a Neptun szerverének. Ez a frissítés javítja a problémát.
+
+## Roadmap & TODO
+
+Az alábbiakban azok a tervezett fejlesztések szerepelnek, amelyek az Angular-alapú Neptun felület teljes körű támogatásához szükségesek vagy a felhasználói élményt számottevően javítanák. A lista a fejlesztési prioritásoknak megfelelően van rendezve; bárki szívesen látott közreműködő.
+
+### Alapvető javítások
+
+- [ ] **Munkamenet-kezelés javítása** — A 10 perces session-timeout és a belőle eredő 401-es hibák kezelése a `GetNewTokens` API-végpont automatikus, háttérben futó meghívásával, hogy a szkript a tokenek lejárta előtt proaktívan megújítsa azokat.
+- [ ] **Tördelés feloldása** — A szerver oldali, fix 10 elemre korlátozott lapozás kijátszása: a következő oldalak automatikus, egymás utáni lekérése és az eredmények egyetlen, összefüggő listában való megjelenítése — pl. a tárgy- és vizsgajelentkezés oldalakon.
+- [ ] **Szerverkapacitás-figyelés** — Az elérhető szabad helyek monitorozása, és — ahol lehetséges — automatikus váltás a terheléselosztó különböző szerverpéldányai között a maximális elérhetőség érdekében.
+
+### Automatizálás
+
+- [ ] **Automatikus bejelentkezés & 2FA-blokk megkerülése** — Az Angular-alapú bejelentkezési folyamat automatizálása, beleértve a szigorú kétfaktoros hitelesítési képernyő megkerülését — pl. a `JSON.parse` hookolásával az `Is2ndFactorAuthenticationRequired` érték `false`-ra állításával, vagy TOTP-token közvetlen injektálásával az auth-kérésbe.
+- [ ] **1 kattintásos tárgyfelvétel az új felületen** — A tárgyjelentkezési folyamat teljes automatizálása: a korábban eltárolt tárgyak és kurzusok bejárása a `ScheduledSubjectsWithScheduledCourses` API-n keresztül, majd a `SubjectSignin` végpont meghívása minden kiválasztott kurzusra — az eredeti funkcionalitás portolása az Angular Neptunra.
+
+### Felhasználói felület fejlesztések
+
+- [ ] **Órarend-tervező takarítás** — A vizuális zaj csökkentése az órarend-tervezőben: egy kibontott tárgy esetén a nem kiválasztott kurzusok automatikus elrejtése, hogy csak a releváns lehetőségek látszódjanak.
+- [ ] **Főmenü optimalizálása** — A kedvencnek jelölt menüpontok kiemelése a hamburger-menüből közvetlenül a felső navigációs sávba; a szülőkategóriákra (pl. _Tárgyak_, _Vizsgák_) kattintva automatikus navigálás az alapértelmezett aloldalra.
+- [ ] **🌙 Sötét mód _(új egyedi funkció)_** — Teljes körű, kapcsolható sötét téma injektálása az Angular SPA-ba: egyedi CSS-réteg, amely az egész felületet lefedi, és amelynek állapota gépenként mentésre kerül — nem a Neptun beépített funkciója, hanem az NNPU saját kiegészítése.
+
+---
 
 ## Közreműködők
 

@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name           Neptun PowerUp!
+// @name           New Neptun PowerUp
 // @namespace      http://example.org
-// @description    Felturbózza a Neptun-odat
-// @version        1.53.0
-// @downloadURL    https://github.com/solymosi/npu/releases/latest/download/npu.user.js
+// @description    New Neptun PowerUp (nnpu) - Angular Neptun kiegészítő
+// @version        2.6.1
+// @downloadURL    https://github.com/zsozso01/nnpu/releases/latest/download/npu.user.js
 // @include        https://*neptun*/*hallgato*/*
 // @include        https://*neptun*/*Hallgatoi*/*
 // @include        https://*neptun*/*oktato*/*
