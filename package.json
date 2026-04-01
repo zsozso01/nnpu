@@ -1,6 +1,6 @@
 {
   "name": "nnpu",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "New Neptun PowerUp (nnpu) - Angular Neptun kiegészítő",
   "main": "npu.user.js",
   "scripts": {

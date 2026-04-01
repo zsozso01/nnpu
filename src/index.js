@@ -1,12 +1,18 @@
 const utils = require("./utils");
+/*
 const storage = require("./storage");
+*/
 
 const modules = [
   // Login page
+  require("./modules/loginBanner"),
+  /*
   require("./modules/autoLogin"),
   require("./modules/loginRetry"),
-  require("./modules/loginBanner"),
+  */
+  require("./modules/darkMode"),
 
+  /*
   // Automatic redirect to the last visited page
   require("./modules/backToLastPage"),
 
@@ -40,10 +46,13 @@ const modules = [
 
   // Signed exams page
   require("./modules/signedExamListFixes"),
+  */
 ];
 
 (async () => {
+  /*
   await storage.initialize();
+  */
 
   modules.forEach(module => {
     if (module.shouldActivate() && (utils.isNeptunPage() || module.runOutsideNeptun)) {

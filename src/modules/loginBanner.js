@@ -3,7 +3,13 @@ const utils = require("../utils");
 const badgeId = "nnpu-login-active-badge";
 const footerFlagAttr = "data-nnpu-version";
 const outageCardId = "nnpu-login-outage-card";
-const autoRefreshKey = "nnpu-outage-autorefresh";
+const themeKey = "nnpu-theme";
+const darkModeClass = "nnpu-dark-mode";
+const rootFixPath = "/hallgatoi";
+const recoveryAttemptKey = "nnpu-loading-recovery-attempt";
+const recoveryLastAttemptKey = "nnpu-loading-recovery-last-at";
+const recoveryDelayMs = 1200;
+const recoveryCooldownMs = 2500;
 
 // ─── School name resolver ─────────────────────────────────────────────────────
 
@@ -44,8 +50,54 @@ function resolveSchoolName() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
+function isAngularHallgatoiPage() {
+  return /\/hallgatoi(\/|$)/i.test(window.location.pathname);
+}
+
 function isAngularLoginPage() {
   return /:\/\/.*neptun.*\/hallgatoi\/login/i.test(window.location.href);
+}
+
+function getStoredTheme() {
+  try {
+    return window.localStorage.getItem(themeKey);
+  } catch (e) {
+    return null;
+  }
+}
+
+function shouldUseDarkMode() {
+  const storedTheme = getStoredTheme();
+  if (storedTheme === "dark") {
+    return true;
+  }
+  if (storedTheme === "light") {
+    return false;
+  }
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
+function applyStoredThemeClass() {
+  if (!document.body) {
+    return;
+  }
+  document.body.classList.toggle(darkModeClass, shouldUseDarkMode());
+}
+
+function getAngularRootUrl(forceReload = false) {
+  const match = window.location.pathname.match(/^(.*\/hallgatoi)(?:\/.*)?$/i);
+  const targetPath = ((match && match[1]) || rootFixPath).replace(/\/?$/, "/");
+  return forceReload ? `${window.location.origin}${targetPath}?nnpu-recover=${Date.now()}` : `${window.location.origin}${targetPath}`;
+}
+
+function navigateToRoot(forceReload = false) {
+  window.location.replace(getAngularRootUrl(forceReload));
+}
+
+function isAngularRootPath() {
+  const currentPath = window.location.pathname.replace(/\/?$/, "/");
+  const rootPath = new URL(getAngularRootUrl(false)).pathname.replace(/\/?$/, "/");
+  return currentPath === rootPath;
 }
 
 function injectStyles() {
@@ -130,54 +182,26 @@ function injectStyles() {
       color: #fff;
     }
 
-    #${outageCardId} .nnpu-btn-toggle {
-      background: #eef3ff;
-      color: #213055;
-    }
-    #${outageCardId} .nnpu-btn-toggle.active {
-      background: #16a34a;
-      color: #fff;
-    }
-
-    #${outageCardId} .nnpu-refresh-countdown {
-      font-size: 13px;
+    #${outageCardId} .nnpu-outage-note {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
       color: #6a7892;
     }
 
-    /* ── Snake minigame ── */
-    #${outageCardId} .nnpu-game-wrap {
-      margin-top: 2px;
-      border-top: 1px solid rgba(9,67,217,0.08);
-      padding-top: 14px;
+    .${darkModeClass} #${outageCardId} {
+      background: linear-gradient(145deg, rgba(22, 29, 41, 0.98), rgba(17, 24, 39, 0.96));
+      border-color: rgba(125, 157, 214, 0.18);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      color: #dbe6ff;
     }
 
-    #${outageCardId} .nnpu-game-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: #8892aa;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .${darkModeClass} #${outageCardId} .nnpu-outage-sub {
+      color: #aebddb;
     }
 
-    #${outageCardId} #nnpu-snake-canvas {
-      display: block;
-      width: 100%;
-      max-width: 300px;
-      border-radius: 10px;
-      border: 1px solid rgba(9,67,217,0.12);
-      background: #f2f3fb;
-      cursor: pointer;
-      image-rendering: pixelated;
-    }
-
-    #${outageCardId} .nnpu-game-hint {
-      margin-top: 6px;
-      font-size: 12px;
-      color: #8892aa;
+    .${darkModeClass} #${outageCardId} .nnpu-outage-note {
+      color: #92a3c4;
     }
 
     #loading-placeholder-index.nnpu-outage-mode {
@@ -187,6 +211,13 @@ function injectStyles() {
         radial-gradient(circle at top left, rgba(9,67,217,0.08), transparent 34%),
         radial-gradient(circle at bottom right, rgba(15,118,110,0.08), transparent 34%),
         #ffffff;
+    }
+
+    .${darkModeClass} #loading-placeholder-index.nnpu-outage-mode {
+      background:
+        radial-gradient(circle at top left, rgba(77, 110, 173, 0.2), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.18), transparent 34%),
+        #0f1319;
     }
   `);
 }
@@ -200,207 +231,93 @@ function isPlaceholderOnlyState() {
   return appRoot.children.length === 0;
 }
 
-// ─── Auto-refresh logic ───────────────────────────────────────────────────────
-
-let refreshTimer = null;
-let refreshCountdown = 0;
-const REFRESH_INTERVAL = 10; // seconds
-
-async function getAutoRefresh() {
+function getRecoveryAttempt() {
   try {
-    return (await GM.getValue(autoRefreshKey)) === "1";
+    return parseInt(window.sessionStorage.getItem(recoveryAttemptKey) || "0", 10) || 0;
   } catch (e) {
-    return false;
+    return 0;
   }
 }
 
-async function setAutoRefresh(enabled) {
+function setRecoveryAttempt(attempt) {
   try {
-    await GM.setValue(autoRefreshKey, enabled ? "1" : "0");
+    window.sessionStorage.setItem(recoveryAttemptKey, String(attempt));
   } catch (e) {}
 }
 
-function clearAutoRefresh(countdownEl) {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
+function getRecoveryLastAttemptAt() {
+  try {
+    return parseInt(window.sessionStorage.getItem(recoveryLastAttemptKey) || "0", 10) || 0;
+  } catch (e) {
+    return 0;
   }
-  refreshCountdown = 0;
-  if (countdownEl) countdownEl.textContent = "";
 }
 
-function startAutoRefresh(countdownEl) {
-  clearAutoRefresh(countdownEl);
-  refreshCountdown = REFRESH_INTERVAL;
-  if (countdownEl) countdownEl.textContent = `(${refreshCountdown}s)`;
-  refreshTimer = setInterval(() => {
-    refreshCountdown -= 1;
-    if (countdownEl) countdownEl.textContent = `(${refreshCountdown}s)`;
-    if (refreshCountdown <= 0) {
+function setRecoveryLastAttemptAt(timestamp) {
+  try {
+    window.sessionStorage.setItem(recoveryLastAttemptKey, String(timestamp));
+  } catch (e) {}
+}
+
+function clearRecoveryAttempt() {
+  try {
+    window.sessionStorage.removeItem(recoveryAttemptKey);
+    window.sessionStorage.removeItem(recoveryLastAttemptKey);
+  } catch (e) {}
+}
+
+function triggerAutomaticRecovery() {
+  const attempt = getRecoveryAttempt();
+  const lastAttemptAt = getRecoveryLastAttemptAt();
+  const remainingCooldownMs = Math.max(0, recoveryCooldownMs - (Date.now() - lastAttemptAt));
+
+  if (remainingCooldownMs > 0) {
+    return {
+      attempt,
+      status: "cooldown",
+      waitMs: remainingCooldownMs,
+    };
+  }
+
+  const nextAttempt = attempt + 1;
+  setRecoveryAttempt(nextAttempt);
+  setRecoveryLastAttemptAt(Date.now());
+
+  window.setTimeout(() => {
+    if (isAngularRootPath()) {
       window.location.reload();
-    }
-  }, 1000);
-}
-
-// ─── Snake minigame ───────────────────────────────────────────────────────────
-
-function mountSnakeGame(container) {
-  const COLS = 20;
-  const ROWS = 14;
-  const CELL = 14;
-  const W = COLS * CELL;
-  const H = ROWS * CELL;
-
-  const canvas = document.createElement("canvas");
-  canvas.id = "nnpu-snake-canvas";
-  canvas.width = W;
-  canvas.height = H;
-  canvas.title = "Kattints a játékhoz!";
-  container.appendChild(canvas);
-
-  const hint = document.createElement("p");
-  hint.className = "nnpu-game-hint";
-  hint.textContent = "Kattints vagy nyomj Space-t az indításhoz · nyilak / WASD";
-  container.appendChild(hint);
-
-  const ctx = canvas.getContext("2d");
-  const COLOR_BG = "#f2f3fb";
-  const COLOR_SNAKE = "#0943d9";
-  const COLOR_HEAD = "#16a34a";
-  const COLOR_FOOD = "#e74c3c";
-  const COLOR_TEXT = "#213055";
-
-  let snake, dir, nextDir, food, score, running, animFrame;
-
-  function rnd(max) { return Math.floor(Math.random() * max); }
-  function randFood() {
-    let pos;
-    do { pos = { x: rnd(COLS), y: rnd(ROWS) }; }
-    while (snake.some(s => s.x === pos.x && s.y === pos.y));
-    return pos;
-  }
-
-  function init() {
-    snake = [{ x: 10, y: 7 }, { x: 9, y: 7 }, { x: 8, y: 7 }];
-    dir = { x: 1, y: 0 };
-    nextDir = { x: 1, y: 0 };
-    food = randFood();
-    score = 0;
-    running = true;
-    hint.textContent = "Nyilak / WASD az irányításhoz";
-    loop();
-  }
-
-  function draw() {
-    ctx.fillStyle = COLOR_BG;
-    ctx.fillRect(0, 0, W, H);
-    // food
-    ctx.fillStyle = COLOR_FOOD;
-    ctx.beginPath();
-    ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 1, 0, Math.PI * 2);
-    ctx.fill();
-    // snake
-    snake.forEach((seg, i) => {
-      ctx.fillStyle = i === 0 ? COLOR_HEAD : COLOR_SNAKE;
-      const r = i === 0 ? 4 : 2;
-      const x = seg.x * CELL + 1;
-      const y = seg.y * CELL + 1;
-      const s = CELL - 2;
-      ctx.beginPath();
-      ctx.roundRect(x, y, s, s, r);
-      ctx.fill();
-    });
-    // score
-    ctx.fillStyle = COLOR_TEXT;
-    ctx.font = "bold 11px LatoWeb, sans-serif";
-    ctx.fillText(`${score} pont`, 6, 14);
-  }
-
-  function drawOver(msg) {
-    ctx.fillStyle = "rgba(33,48,85,0.62)";
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px LatoWeb, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(msg, W / 2, H / 2 - 8);
-    ctx.font = "12px LatoWeb, sans-serif";
-    ctx.fillText("Kattints az újrakezdéshez", W / 2, H / 2 + 14);
-    ctx.textAlign = "left";
-  }
-
-  function step() {
-    dir = nextDir;
-    const head = { x: (snake[0].x + dir.x + COLS) % COLS, y: (snake[0].y + dir.y + ROWS) % ROWS };
-    if (snake.some(s => s.x === head.x && s.y === head.y)) {
-      running = false;
-      draw();
-      drawOver(`Vége! ${score} pont`);
-      hint.textContent = "Kattints az újrakezdéshez";
       return;
     }
-    snake.unshift(head);
-    if (head.x === food.x && head.y === food.y) {
-      score += 1;
-      food = randFood();
-    } else {
-      snake.pop();
-    }
-    draw();
+
+    navigateToRoot(false);
+  }, recoveryDelayMs);
+
+  return {
+    attempt: nextAttempt,
+    status: "redirecting",
+    waitMs: recoveryDelayMs,
+  };
+}
+
+function getRecoveryNoteText(recoveryState) {
+  const fallbackState = recoveryState || {
+    attempt: getRecoveryAttempt(),
+    status: "redirecting",
+  };
+
+  const safeAttempt = Math.max(1, fallbackState.attempt || 1);
+  if (fallbackState.status === "cooldown") {
+    return `Automatikus helyreállítás folyamatban. ${safeAttempt}. próbálkozás után rövid szünetet tartok, hogy a szerver fellélegezhessen.`;
   }
 
-  let lastTime = 0;
-  const SPEED = 140; // ms per step
-
-  function loop(ts) {
-    if (!running) return;
-    animFrame = requestAnimationFrame(loop);
-    if (!ts || ts - lastTime >= SPEED) {
-      lastTime = ts || 0;
-      step();
-    }
-  }
-
-  function handleKey(e) {
-    if (!running) return;
-    const map = {
-      ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 },
-      ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 },
-      ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 },
-      ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 },
-    };
-    const nd = map[e.key];
-    if (!nd) return;
-    if (nd.x === -dir.x && nd.y === -dir.y) return;
-    nextDir = nd;
-    e.preventDefault();
-  }
-
-  // Draw idle state
-  ctx.fillStyle = COLOR_BG;
-  ctx.fillRect(0, 0, W, H);
-  drawOver("🐍 Kattints az indításhoz");
-
-  canvas.addEventListener("click", () => {
-    if (animFrame) cancelAnimationFrame(animFrame);
-    init();
-  });
-  canvas.addEventListener("keydown", handleKey);
-  document.addEventListener("keydown", e => {
-    if (e.key === " " && !running) {
-      if (animFrame) cancelAnimationFrame(animFrame);
-      init();
-    } else {
-      handleKey(e);
-    }
-  });
-  canvas.setAttribute("tabindex", "0");
+  return `Automatikus helyreállítás folyamatban. ${safeAttempt}. próbálkozás: visszalépés a /hallgatoi/ gyökéroldalra.`;
 }
 
 // ─── Outage card ──────────────────────────────────────────────────────────────
 
-async function showOutageCard() {
+async function showOutageCard(recoveryState = null) {
   const placeholder = document.getElementById("loading-placeholder-index");
-  if (!placeholder || document.getElementById(outageCardId) || !isPlaceholderOnlyState()) {
+  if (!placeholder || !isPlaceholderOnlyState()) {
     return;
   }
 
@@ -408,90 +325,39 @@ async function showOutageCard() {
   placeholder.classList.add("nnpu-outage-mode");
 
   const school = resolveSchoolName();
-  const isAutoRefreshOn = await getAutoRefresh();
+  let card = document.getElementById(outageCardId);
+  let note;
 
-  const card = document.createElement("section");
-  card.id = outageCardId;
+  if (!card) {
+    card = document.createElement("section");
+    card.id = outageCardId;
 
-  // ── Header ──
-  const pill = document.createElement("div");
-  pill.className = "nnpu-outage-pill";
-  pill.textContent = `⚡ NNPU v${GM.info.script.version} Aktív`;
-  card.appendChild(pill);
+    const pill = document.createElement("div");
+    pill.className = "nnpu-outage-pill";
+    pill.textContent = `⚡ NNPU v${GM.info.script.version} Aktív`;
+    card.appendChild(pill);
 
-  const heading = document.createElement("h2");
-  heading.textContent = "A login oldal most legalább stílusosan áll. 🥔";
-  card.appendChild(heading);
+    const heading = document.createElement("h2");
+    heading.textContent = "A Neptun oldal most legalább stílusosan áll. 🥔";
+    card.appendChild(heading);
 
-  const sub = document.createElement("p");
-  sub.className = "nnpu-outage-sub";
-  sub.textContent =
-    `Úgy tűnik, a ${school} szerverei épp valami fontosabb dologgal foglalkoznak ` +
-    `– például léteznek. Az Angular bundle-ök nem álltak fel. ¯\\_(ツ)_/¯`;
-  card.appendChild(sub);
+    const sub = document.createElement("p");
+    sub.className = "nnpu-outage-sub";
+    sub.textContent = `Úgy tűnik, a ${school} szerverei épp valami fontosabb dologgal foglalkoznak – például léteznek. Az Angular bundle-ök ezen az oldalon nem álltak fel, ezért az NNPU automatikusan megpróbál visszalépni a tiszta /hallgatoi/ gyökéroldalra, rövid szünetekkel újrapróbálva.`;
+    card.appendChild(sub);
 
-  // ── Actions row ──
-  const actionsRow = document.createElement("div");
-  actionsRow.className = "nnpu-outage-actions";
+    note = document.createElement("p");
+    note.className = "nnpu-outage-note";
+    card.appendChild(note);
 
-  // Retry button
-  const retryBtn = document.createElement("button");
-  retryBtn.className = "nnpu-btn nnpu-btn-primary";
-  retryBtn.textContent = "🔄 Újrapróbálás";
-  retryBtn.addEventListener("click", () => window.location.reload());
-  actionsRow.appendChild(retryBtn);
-
-  // Auto-refresh toggle
-  const toggleBtn = document.createElement("button");
-  toggleBtn.className = "nnpu-btn nnpu-btn-toggle" + (isAutoRefreshOn ? " active" : "");
-  toggleBtn.textContent = isAutoRefreshOn ? "⏱ Auto-frissítés: BE" : "⏱ Auto-frissítés: KI";
-  actionsRow.appendChild(toggleBtn);
-
-  // Countdown label
-  const countdownEl = document.createElement("span");
-  countdownEl.className = "nnpu-refresh-countdown";
-  actionsRow.appendChild(countdownEl);
-
-  card.appendChild(actionsRow);
-
-  // ── Toggle handler ──
-  let autoOn = isAutoRefreshOn;
-
-  function applyAutoRefreshState() {
-    if (autoOn) {
-      toggleBtn.classList.add("active");
-      toggleBtn.textContent = "⏱ Auto-frissítés: BE";
-      startAutoRefresh(countdownEl);
-    } else {
-      toggleBtn.classList.remove("active");
-      toggleBtn.textContent = "⏱ Auto-frissítés: KI";
-      clearAutoRefresh(countdownEl);
-    }
+    placeholder.appendChild(card);
+  } else {
+    note = card.querySelector(".nnpu-outage-note");
   }
 
-  toggleBtn.addEventListener("click", async () => {
-    autoOn = !autoOn;
-    await setAutoRefresh(autoOn);
-    applyAutoRefreshState();
-  });
-
-  if (autoOn) {
-    startAutoRefresh(countdownEl);
+  if (note) {
+    note.textContent = getRecoveryNoteText(recoveryState);
   }
-
-  // ── Mini-game ──
-  const gameWrap = document.createElement("div");
-  gameWrap.className = "nnpu-game-wrap";
-
-  const gameLabel = document.createElement("div");
-  gameLabel.className = "nnpu-game-label";
-  gameLabel.textContent = "🐍 Míg vársz – kígyó";
-  gameWrap.appendChild(gameLabel);
-
-  mountSnakeGame(gameWrap);
-  card.appendChild(gameWrap);
-
-  placeholder.appendChild(card);
 }
 
 // ─── Footer version tag ───────────────────────────────────────────────────────
@@ -510,6 +376,7 @@ function appendFooterVersion() {
 async function showLoginBanner() {
   if (!isAngularLoginPage()) return;
 
+  applyStoredThemeClass();
   injectStyles();
 
   // Short fuse: 1 second before giving up and showing the outage card
@@ -522,9 +389,7 @@ async function showLoginBanner() {
     return;
   }
 
-  // Angular is alive – clear the auto-refresh preference so it won't fire
-  // on the next successful load.
-  try { await GM.deleteValue(autoRefreshKey); } catch (e) {}
+  clearRecoveryAttempt();
 
   const badge = document.createElement("span");
   badge.id = badgeId;
@@ -533,14 +398,79 @@ async function showLoginBanner() {
   appendFooterVersion();
 }
 
+function initializeAngularOutageRecovery() {
+  if (!isAngularHallgatoiPage()) {
+    return;
+  }
+
+  applyStoredThemeClass();
+  injectStyles();
+  let recoveryCheckTimeoutId = null;
+
+  const scheduleRecoveryCheck = delayMs => {
+    if (recoveryCheckTimeoutId !== null) {
+      return;
+    }
+
+    recoveryCheckTimeoutId = window.setTimeout(() => {
+      recoveryCheckTimeoutId = null;
+      tryShowRecovery();
+    }, delayMs);
+  };
+
+  const tryShowRecovery = () => {
+    if (!isPlaceholderOnlyState()) {
+      clearRecoveryAttempt();
+      return false;
+    }
+
+    const recoveryState = triggerAutomaticRecovery();
+    showOutageCard(recoveryState);
+    appendFooterVersion();
+
+    if (recoveryState.status === "cooldown") {
+      scheduleRecoveryCheck(recoveryState.waitMs + 50);
+    }
+
+    return true;
+  };
+
+  if (tryShowRecovery()) {
+    return;
+  }
+
+  const observer = new MutationObserver(() => {
+    if (tryShowRecovery()) {
+      observer.disconnect();
+    }
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+
+  window.setTimeout(() => {
+    observer.disconnect();
+  }, 15000);
+}
+
 module.exports = {
-  shouldActivate: () => isAngularLoginPage() || utils.isLoginPage(),
+  shouldActivate: () => isAngularHallgatoiPage() || utils.isLoginPage(),
   runOutsideNeptun: true,
   initialize: () => {
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", showLoginBanner, { once: true });
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+          showLoginBanner();
+          initializeAngularOutageRecovery();
+        },
+        { once: true }
+      );
       return;
     }
     showLoginBanner();
+    initializeAngularOutageRecovery();
   },
 };

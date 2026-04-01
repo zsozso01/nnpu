@@ -2,1502 +2,1709 @@
 // @name           New Neptun PowerUp
 // @namespace      http://example.org
 // @description    New Neptun PowerUp (nnpu) - Angular Neptun kiegészítő
-// @version        2.6.1
+// @version        2.6.2
 // @downloadURL    https://github.com/zsozso01/nnpu/releases/latest/download/npu.user.js
+// @include        https://*neptun*/*hallgato*
 // @include        https://*neptun*/*hallgato*/*
+// @include        https://*neptun*/*Hallgatoi*
 // @include        https://*neptun*/*Hallgatoi*/*
 // @include        https://*neptun*/*oktato*/*
+// @include        https://*hallgato*.*neptun*
 // @include        https://*hallgato*.*neptun*/*
 // @include        https://*oktato*.*neptun*/*
+// @include        https://netw*.nnet.sze.hu/hallgato*
 // @include        https://netw*.nnet.sze.hu/hallgato/*
+// @include        https://nappw.dfad.duf.hu/hallgato*
 // @include        https://nappw.dfad.duf.hu/hallgato/*
 // @include        https://host.sdakft.hu/*
 // @include        https://neptun.ejf.hu/ejfhw/*
 // @grant          GM.xmlHttpRequest
 // @grant          GM.getValue
 // @grant          GM.setValue
+// @grant          GM.deleteValue
 // @grant          GM.info
 // @require        https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // ==/UserScript==
 
-/**
- * THIS FILE IS OBSOLETE!
- * Please do not submit any PRs against it.
- *
- * The only reason it is here is to provide a seamless upgrade path from version 1.52.x
- * to version 2.x for existing users who have the URL of this file configured in their
- * TamperMonkey installation. This version 1.53.0 has no changes whatsoever other than
- * the new `@downloadURL` directive above that points to the URL of version 2.x.
- *
- * The source code is now located in the `src` directory and has been refactored into
- * several independent modules which are in the `src/modules` directory. To add a new
- * module you'll need to create a new file there and reference it in `src/index.js`.
- *
- * This file will be removed after Jun 2021.
- */
-
-(function() {
-  "use strict";
-
-  var npu = {
-
-    /* == STARTUP == */
-
-      /* Run features */
-      init: async function() {
-        if(!this.isNeptunPage()) {
-          return;
-        }
-
-        this.initParameters();
-        await this.loadData();
-
-        if(this.isLogin()) {
-          this.initUserSelect();
-          this.initAutoLogin();
-          this.fixWaitDialog();
-        }
-        else {
-          this.hideHeader();
-          this.fixTitle();
-          this.fixMenu();
-          this.fixTermSelect();
-          this.fixPagination();
-          this.fixOfficialMessagePopup();
-          this.initKeepSession();
-          this.initProgressIndicator();
-
-          if(this.isPage("0203") || this.isPage("c_common_timetable")) {
-            this.fixTimetable();
-          }
-
-          if(this.isPage("0206") || this.isPage("h_markbook")) {
-            this.fixMarkList();
-          }
-
-          if(this.isPage("0222") || this.isPage("h_advance")) {
-            this.fixProgressList();
-          }
-
-          if(this.isPage("0303") || this.isPage("h_addsubjects")) {
-            this.fixCourseList();
-            this.initCourseAutoList();
-            this.initCourseStore();
-          }
-
-          if(this.isPage("0401") || this.isPage("h_exams")) {
-            this.fixExamList();
-            this.initExamAutoList();
-          }
-
-          if(this.isPage("0402") || this.isPage("h_signedexams")) {
-            this.fixSignedExamList();
-          }
-        }
-      },
-
-    /* == USER DATA == */
-
-      /* Stored data */
-      data: { },
-
-      /* Load all data from local storage */
-      loadData: async function() {
-        try {
-          npu.data = JSON.parse(await GM.getValue("data")) || {};
-        }
-        catch(e) { }
-        await npu.upgradeSchema();
-      },
-
-      /* Save all data to local storage */
-      saveData: function() {
-        this.runAsync(function() {
-          GM.setValue("data", JSON.stringify(npu.data));
-        });
-      },
-
-      /* Gets the specified property or all data of the specified user or the current user */
-      getUserData: function(domain, user, key) {
-        domain = domain ? domain : npu.domain;
-        user = user ? user : npu.user;
-        key = Array.prototype.slice.call(arguments).slice(2);
-        key = key.length == 1 && typeof key[0].length != "undefined" ? key[0] : key;
-        return npu.getChild(npu.data, ["users", domain, user, "data"].concat(key));
-      },
-
-      /* Sets the specified property of the specified user or the current user */
-      setUserData: function(domain, user, key, value) {
-        domain = domain ? domain : npu.domain;
-        user = user ? user : npu.user;
-        key = Array.prototype.slice.call(arguments).slice(2, arguments.length - 1);
-        key = key.length == 1 && typeof key[0].length != "undefined" ? key[0] : key;
-        value = arguments.length > 4 ? arguments[arguments.length - 1] : value;
-        npu.setChild(npu.data, ["users", domain, user, "data"].concat(key), value);
-      },
-
-      /* Upgrade the data schema to the latest version */
-      upgradeSchema: async function() {
-        var ver = typeof npu.data.version != "undefined" ? npu.data.version : 0;
-
-        /* < 1.3 */
-        if(ver < 1) {
-          try {
-            var users = JSON.parse(await GM.getValue("neptun.users"));
-          }
-          catch(e) { }
-          if(users != null && typeof users.length != "undefined") {
-            for(var i = 0; i < users.length; i++) {
-              npu.setChild(npu.data, ["users", npu.domain, users[i][0].toUpperCase(), "password"], npu.encodeBase64(users[i][1]));
-            }
-          }
-          try {
-            var courses = JSON.parse(await GM.getValue("neptun.courses"));
-          }
-          catch(e) { }
-          if(typeof courses == "object") {
-            for(var user in courses) {
-              for(var subject in courses[user]) {
-                npu.setUserData(null, user, ["courses", "_legacy", subject], courses[user][subject]);
-              }
-            }
-          }
-          npu.data.version = 1;
-        }
-
-        npu.saveData();
-      },
-
-    /* == LOGIN == */
-
-      /* Returns users with stored credentials */
-      getLoginUsers: function() {
-        var users = [], list = npu.getChild(npu.data, ["users", npu.domain]);
-        for(var user in list) {
-          if(typeof list[user].password == "string" && list[user].password != "") {
-            users.push(user);
-          }
-        }
-        return users;
-      },
-
-      /* Load and display user select field */
-      initUserSelect: function() {
-        var users = npu.getLoginUsers();
-
-        $(".login_left_side .login_input").css("text-align", "left");
-
-        var selectField = $('<select id="user_sel" class="bevitelimezo" name="user_sel"></select>').hide();
-        for(var i = 0; i < users.length; i++) {
-          selectField.append('<option id="' + users[i] + '" value="' + users[i] + '" class="neptun_kod">' + users[i] + '</option>');
-        }
-
-        selectField.append('<option disabled="disabled" class="user_separator">&nbsp;</option>');
-
-        selectField.append('<option id="other_user" value="__OTHER__">Más felhasználó...</option>');
-        selectField.append('<option id="edit_list" value="__DELETE__">Tárolt kód törlése...</option>');
-
-        $("td", selectField).css("position", "relative");
-        selectField.css("font-weight", "bold").css("font-family", "consolas, courier new, courier, monospace").css("font-size", "1.5em");
-        $("option[class!=neptun_kod]", selectField).css("font-size", "0.8em").css("font-family", "tahoma").css("font-weight", "normal").css("color", "#666").css("font-style", "italic");
-        $("option.user_separator", selectField).css("font-size", "0.5em");
-
-        selectField.bind("mousedown focus change", function() { npu.abortLogin() });
-        $("#pwd, #Submit, #btnSubmit").bind("mousedown focus change", function() { npu.abortLogin() });
-
-        selectField.bind("change", function() {
-          npu.clearLogin();
-
-          if($(this).val() == "__OTHER__") {
-            npu.hideSelect();
-            return false;
-          }
-
-          if($(this).val() == "__DELETE__") {
-            $("#user_sel").val(users[0]).trigger("change");
-            var defaultString = "mindegyiket";
-            for(var i = 0; i < users.length; i++) {
-              defaultString += "   /   " + users[i];
-            }
-            var itemToDelete = unsafeWindow.prompt("Írd be a törlendő neptun kódot. Az összes törléséhez írd be: MINDEGYIKET", defaultString);
-            if(itemToDelete == "" || itemToDelete == null) {
-              return false;
-            }
-
-            var deleted = false;
-            for(var i = 0; i < users.length; i++) {
-              if(users[i] == itemToDelete.toUpperCase() || itemToDelete.toUpperCase() == "MINDEGYIKET") {
-                npu.setChild(npu.data, ["users", npu.domain, users[i], "password"], null);
-                deleted = true;
-              }
-            }
-
-            if(!deleted) {
-              if(confirm("A megadott neptun kód nincs benne a tárolt listában. Megpróbálod újra?")) {
-                $("#user_sel").val("__DELETE__").trigger("change");
-              }
-              return false;
-            }
-
-            npu.saveData();
-
-            if(itemToDelete.toUpperCase() == "MINDEGYIKET") {
-              alert("Az összes tárolt neptun kód törölve lett a bejelentkezési listából.");
-              window.location.reload();
-              return false;
-            }
-
-            alert("A(z) " + itemToDelete + " felhasználó törölve lett a bejelentkezési listából.");
-            window.location.reload();
-            return false;
-          }
-
-          $("#user").val(users[$(this).get(0).selectedIndex]);
-          $("#pwd").val(npu.decodeBase64(npu.getChild(npu.data, ["users", npu.domain, users[$(this).get(0).selectedIndex], "password"])));
-        });
-
-        $("input[type=button].login_button").attr("onclick", "").bind("click", function(e) {
-          e.preventDefault();
-
-          if($("#user_sel").val() == "__OTHER__") {
-            if($("#user").val().trim() == "" || $("#pwd").val().trim() == "") {
-              return;
-            }
-
-            var foundID = -1;
-            for(var i = 0; i < users.length; i++) {
-              if(users[i] == $("#user").val().toUpperCase()) {
-                foundID = i;
-              }
-            }
-
-            if(foundID == -1) {
-              if(confirm("Szeretnéd menteni a beírt adatokat, hogy később egy kattintással be tudj lépni erről a számítógépről?")) {
-                npu.setChild(npu.data, ["users", npu.domain, $("#user").val().toUpperCase(), "password"], npu.encodeBase64($("#pwd").val()));
-                npu.saveData();
-              }
-              npu.submitLogin();
-              return;
-            }
-            else {
-              $("#user_sel").val(users[foundID]);
-            }
-          }
-
-          if($("#user_sel").val() == "__DELETE__") {
-            return;
-          }
-
-          if($("#pwd").val() != npu.decodeBase64(npu.getChild(npu.data, ["users", npu.domain, users[$("#user_sel").get(0).selectedIndex], "password"]))) {
-            if(confirm("Szeretnéd megváltoztatni a(z) " + $("#user").val().toUpperCase() + " felhasználó tárolt jelszavát a most beírt jelszóra?")) {
-              npu.setChild(npu.data, ["users", npu.domain, users[$("#user_sel").get(0).selectedIndex], "password"], npu.encodeBase64($("#pwd").val()));
-              npu.saveData();
-            }
-          }
-
-          npu.submitLogin();
-          return;
-        });
-
-        $("#user").parent().append(selectField);
-        npu.showSelect();
-        selectField.trigger("change");
-      },
-
-      /* Initialize auto login and start countdown */
-      initAutoLogin: function() {
-        var users = npu.getLoginUsers();
-
-        if(users.length < 1) {
-          return;
-        }
-
-        var submit = $("#Submit, #btnSubmit");
-
-        npu.loginCount = 3;
-        npu.loginButton = submit.attr("value");
-        submit.attr("value", npu.loginButton + " (" + npu.loginCount + ")");
-
-        $(".login_button_td").append('<div id="abortLogin" style="text-align: center; margin: 23px 0 0 128px"><a href="#" class="abort_login">Megszakít</a></div>');
-        $(".login_button_td a.abort_login").click(function(e) {
-          e.preventDefault();
-          npu.abortLogin();
-        });
-
-        npu.loginTimer = window.setInterval(function() {
-          npu.loginCount--;
-          submit.attr("value", npu.loginButton + " (" + npu.loginCount + ")");
-
-          if(npu.loginCount <= 0) {
-            npu.submitLogin();
-            npu.abortLogin();
-            submit.attr("value", npu.loginButton + "...");
-          }
-        }, 1000);
-      },
-
-      /* Abort the auto login countdown */
-      abortLogin: function() {
-        window.clearInterval(npu.loginTimer);
-        $("#Submit, #btnSubmit").attr("value", npu.loginButton);
-        $("#abortLogin").remove();
-      },
-
-      /* Clears the login form */
-      clearLogin: function() {
-        $("#user").val("");
-        $("#pwd").val("");
-      },
-
-      /* Display user select field */
-      showSelect: function() {
-        $("#user").hide();
-        $("#user_sel").show().focus();
-        npu.runEval(' Page_Validators[0].controltovalidate = "user_sel" ');
-      },
-
-      /* Hide user select field and display original textbox */
-      hideSelect: function() {
-        $("#user_sel").hide();
-        $("#user").show().focus();
-        npu.runEval(' Page_Validators[0].controltovalidate = "user" ');
-      },
-
-      /* Submit the login form */
-      submitLogin: function() {
-        unsafeWindow.docheck();
-      },
-
-      /* Reconfigure server full wait dialog parameters */
-      fixWaitDialog: function() {
-        unsafeWindow.maxtrynumber = 1e6;
-        /* Export the patched starttimer function into the security context of the page in order to avoid an "access denied" error on Firefox. Details: https://blog.mozilla.org/addons/2014/04/10/changes-to-unsafewindow-for-the-add-on-sdk */
-        var timerFunction = function() {
-          unsafeWindow.login_wait_timer = unsafeWindow.setInterval(unsafeWindow.docheck, 5000);
-        };
-        exportFunction(timerFunction, unsafeWindow, {defineAs: "npu_starttimer"});
-        unsafeWindow.starttimer = unsafeWindow.npu_starttimer;
-      },
-
-    /* == MAIN == */
-
-      /* Hide page header to save vertical space */
-      hideHeader: function() {
-        $("#panHeader, #panCloseHeader").hide();
-        $("table.top_menu_wrapper").css("margin-top", "5px").css("margin-bottom", "8px");
-        $("#form1 > fieldset").css("border", "0 none");
-        $("#span_changeproject").parent().hide();
-      },
-
-      /* Add current page name to the window title */
-      fixTitle: function() {
-        var originalTitle = document.title;
-        window.setInterval(function() {
-          var pageTitle = $("#menucaption").text().toString();
-          if (document.title == originalTitle) {
-            document.title = (pageTitle == "" ? "" : pageTitle + " - ") + originalTitle;
-          }
-        }, 1000);
-      },
-
-      /* Fix opening in new tab and add shortcuts */
-      fixMenu: function() {
-        var color = $("#lbtnQuit").css("color");
-
-        $(
-          '<style type="text/css"> ' +
-            'ul.menubar, ' +
-            '.top_menu_wrapper ' +
-            '{ ' +
-              'cursor: default !important; ' +
-            '} ' +
-            '#mb1 li.menu-parent ' +
-            '{ ' +
-              'color: #525659 !important; ' +
-            '} ' +
-            '#mb1 li.menu-parent.has-target ' +
-            '{ ' +
-              'color: ' + color + ' !important; ' +
-            '} ' +
-            '#mb1 li.menu-parent.has-target:hover ' +
-            '{ ' +
-              'color: #000 !important; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        $("#mb1_Tanulmanyok").attr("targeturl", "main.aspx?ctrl=0206&ismenuclick=true").attr("hoverid", "#mb1_Tanulmanyok_Leckekonyv");
-        $("#mb1_Targyak").attr("targeturl", "main.aspx?ctrl=0303&ismenuclick=true").attr("hoverid", "#mb1_Targyak_Targyfelvetel");
-        $("#mb1_Vizsgak").attr("targeturl", "main.aspx?ctrl=0401&ismenuclick=true").attr("hoverid", "#mb1_Vizsgak_Vizsgajelentkezes");
-
-        var orarend = $('<li aria-haspopup="false" tabindex="0" role="menuitem" class="menu-parent has-target" id="mb1_Orarend" targeturl="main.aspx?ctrl=0203&amp;ismenuclick=true">Órarend</li>');
-        $("#mb1_Targyak").before(orarend);
-        $("#mb1_Tanulmanyok_Órarend").remove();
-
-        if(!$("#upChooser_chooser_kollab").hasClass("KollabChooserSelected")) {
-          $('<li aria-haspopup="false" tabindex="0" role="menuitem" class="menu-parent has-target" id="mb1_MeetStreet" targeturl="javascript:__doPostBack(\'upChooser$btnKollab\',\'\')">Meet Street</li>').appendTo("#mb1");
-        }
-        if(!$("#upChooser_chooser_neptun").hasClass("NeptunChooserSelected")) {
-          $('<li aria-haspopup="false" tabindex="0" role="menuitem" class="menu-parent has-target" id="mb1_TanulmanyiRendszer" targeturl="javascript:__doPostBack(\'upChooser$btnNeptun\',\'\')">Neptun</li>').appendTo("#mb1");
-        }
-
-        $("#mb1 li[targeturl]").css("position", "relative").each(function() {
-          $(this).addClass("has-target");
-          var a = $('<a href="' + $(this).attr("targeturl") + '" style="display: block; position: absolute; left: 0; top: 0; width: 100%; height: 100%"></a>');
-          a.click(function(e) {
-            $("ul.menu").css("visibility", "hidden");
-            e.stopPropagation();
-          });
-          var hoverid = $(this).attr("hoverid");
-          if(hoverid) {
-            a.hover(function() { $(hoverid).addClass("menu-hover"); }, function() { $(hoverid).removeClass("menu-hover"); });
-          }
-          $(this).append(a);
-        });
-      },
-
-      /* Replace term drop-down list with buttons */
-      fixTermSelect: function() {
-        $(
-          '<style type="text/css"> ' +
-            '.termSelect ' +
-            '{ ' +
-              'list-style: none; ' +
-              'padding: 0; ' +
-            '} ' +
-            '.termSelect li ' +
-            '{ ' +
-              'display: inline-block; ' +
-              '*display: inline; ' +
-              'vertical-align: middle; ' +
-              'margin: 0 15px 0 0; ' +
-              'line-height: 250%; ' +
-            '} ' +
-            '.termSelect li a ' +
-            '{ ' +
-              'padding: 5px; ' +
-            '} ' +
-            '.termSelect li a.button ' +
-            '{ ' +
-              'color: #FFF; ' +
-              'box-shadow: none; ' +
-              'text-decoration: none; ' +
-              'cursor: default; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        var findTermSelect = function() {
-          return $("#upFilter_cmbTerms, #upFilter_cmb_m_cmb, #cmbTermsNormal, #upFilter_cmbTerms_m_cmb, #cmb_cmb, #c_common_timetable_cmbTermsNormal, #cmbTerms_cmb").first();
-        };
-        var clickExecuteButton = function() {
-          if(["0303", "h_addsubjects", "0401", "h_exams", "0503", "h_transactionlist", "1406", "h_grading_request"].indexOf(npu.getPage()) != -1) {
-            return;
-          }
-          npu.runEval(function() {
-            $("#upFilter_expandedsearchbutton").click();
-          });
-        };
-        var selectTerm = function(term) {
-          var termSelect = findTermSelect(), el = $(".termSelect a[data-value=" + term + "]");
-          if(el.size() == 0 || el.hasClass("button")) {
-            return false;
-          }
-          termSelect.val(el.attr("data-value"));
-          $(".termSelect .button").removeClass("button");
-          el.addClass("button");
-          var onChange = termSelect[0].getAttributeNode("onchange");
-          if(onChange) {
-            npu.runAsync(function() { npu.runEval(onChange.value); });
-          }
-          return true;
-        };
-
-        window.setInterval(function() {
-          var termSelect = findTermSelect();
-          if(termSelect.is(":disabled")) {
-            return;
-          }
-          if(termSelect.is(":visible")) {
-            $(".termSelect").remove();
-            var select = $('<ul class="termSelect"></ul>');
-            var stored = npu.getUserData(null, null, ["termSelect", npu.getPage()]);
-            var found = false;
-            var match = $("#lblTrainingName").text().match(/:(\d{4}\/\d{2}\/\d)\[.*?\]\)/);
-            var admissionSemester = match && String(match[1]);
-
-            $("option", termSelect).each(function() {
-              if($(this).attr("value") == "-1") { return; }
-              if(admissionSemester && $(this).text() < admissionSemester) { return; }
-              var item = $('<li><a href="#" data-value="' + $(this).attr("value") + '" class="' + (termSelect.val() == $(this).attr("value") ? "button" : "") + '">' + $(this).html() + "</a></li>");
-              if(typeof stored != "undefined" && $(this).attr("value") == stored) {
-                found = true;
-              }
-              $("a", item).bind("click", function(e) {
-                e.preventDefault();
-                var term = $(this).attr("data-value");
-                if(selectTerm(term)) {
-                  if(stored != term) {
-                    stored = term;
-                    npu.setUserData(null, null, ["termSelect", npu.getPage()], term);
-                    npu.saveData();
-                  }
-                  clickExecuteButton();
-                }
-              });
-              select.append(item);
-            });
-            termSelect.parent().append(select);
-            termSelect.hide();
-            if(!termSelect.data("initialized")) {
-              termSelect.data("initialized", true);
-              if(found && termSelect.val() != stored) {
-                selectTerm(stored);
-                clickExecuteButton();
-              }
-              else if($(".grid_pagertable").size() == 0) {
-                clickExecuteButton();
-              }
-            }
-          }
-        }, 500);
-      },
-
-      /* Set all paginators to 500 items per page */
-      fixPagination: function() {
-        window.setInterval(function() {
-          var pageSelect = $(".grid_pagerpanel select");
-          pageSelect.each(function() {
-            var e = $(this);
-            e.hide();
-            $(".link_pagesize", e.closest("tr")).html("");
-            if(e.attr("data-listing") != "1" && e.val() != "500") {
-              e.attr("data-listing", "1").val("500");
-              var onChange = this.getAttributeNode("onchange");
-              if(onChange) {
-                npu.runEval(onChange.value);
-              }
-            }
-          });
-        }, 100);
-      },
-
-      /* Allow user to dismiss the 'you have an official message' popup */
-      fixOfficialMessagePopup: function() {
-        var dismiss = function() {
-          $("[aria-describedby=upRequiredMessageReader_upmodal_RequiredMessageReader_divpopup] .ui-dialog-content").dialog("close");
-        };
-
-        window.setInterval(function() {
-          var messagePopup = $("#upRequiredMessageReader_upmodal_RequiredMessageReader_divpopup:visible").closest(".ui-dialog");
-          if(messagePopup.size() > 0 && $("#upFunction_c_messages_upMain_upGrid").size() === 0) {
-            npu.runEval(dismiss);
-          }
-          if(messagePopup.size() > 0 && messagePopup.is(":not([data-npu-enhanced])")) {
-            messagePopup.attr("data-npu-enhanced", "true");
-            $("input[commandname=Tovabb]", messagePopup).val("Elolvasom");
-            var dismissBtn = $('<input value="Most nem érdekel" class="npu_dismiss ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" type="button">');
-            dismissBtn.click(function() {
-              npu.runEval(dismiss);
-            });
-            $(".ui-dialog-footerbar > div", messagePopup).append(dismissBtn);
-          }
-        }, 200);
-      },
-
-      /* Hide countdown and send requests to the server to keep the session alive */
-      initKeepSession: function() {
-        var cdt = $("#hfCountDownTime");
-        var timeout = 120;
-        if(cdt.size() > 0) {
-          var cdto = parseInt(cdt.val());
-          if(cdto > 60) {
-            timeout = cdto;
-          }
-        }
-        var keepAlive = function() {
-          window.setTimeout(function() {
-            $.ajax({
-              url: "main.aspx"
-            });
-            keepAlive();
-          }, timeout * 1000 - 30000 - Math.floor(Math.random() * 30000));
-        };
-        keepAlive();
-
-        window.setInterval(function() {
-          npu.runEval(function() {
-            ShowModal = function() { };
-            clearTimeout(timerID);
-            clearTimeout(timerID2);
-            sessionEndDate = null;
-          });
-          if($("#npuStatus").size() == 0) {
-            $("#upTraining_lblRemainingTime").html('<span id="npuStatus" style="font-weight: normal"><a href="https://github.com/solymosi/npu" target="_blank">Neptun PowerUp!</a> v' + GM.info.script.version + '</span>');
-          }
-        }, 1000);
-      },
-
-      /* Use custom loading indicator for async requests */
-      initProgressIndicator: function() {
-        var color = $("#lbtnQuit").css("color");
-        $(
-          '<style type="text/css"> ' +
-            '#npu_loading ' +
-            '{ ' +
-              'position: fixed; ' +
-              'width: 150px; ' +
-              'margin-left: -75px; ' +
-              'left: 50%; ' +
-              'top: 0; ' +
-              'background: ' + color + '; ' +
-              'color: white; ' +
-              'font-size: 1.2em; ' +
-              'font-weight: bold; ' +
-              'padding: 8px 10px; ' +
-              'text-align: center; ' +
-              'z-index: 1000; ' +
-              'display: none; ' +
-              '-webkit-border-bottom-right-radius: 5px; ' +
-              '-webkit-border-bottom-left-radius: 5px; ' +
-              '-moz-border-radius-bottomright: 5px; ' +
-              '-moz-border-radius-bottomleft: 5px; ' +
-              'border-bottom-right-radius: 5px; ' +
-              'border-bottom-left-radius: 5px; ' +
-              '-webkit-box-shadow: 0px 0px 3px 0px black; ' +
-              '-moz-box-shadow: 0px 0px 3px 0px black; ' +
-              'box-shadow: 0px 0px 3px 0px black; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        $("#progress, #customtextprogress").css("visibility", "hidden");
-        $('<div id="npu_loading">Kis türelmet...</div>').appendTo("body");
-
-        npu.runEval(function() {
-          var manager = Sys.WebForms.PageRequestManager.getInstance();
-          manager.add_beginRequest(function() {
-            $("#npu_loading").show();
-          });
-          manager.add_endRequest(function() {
-            $("#npu_loading").hide();
-          });
-        });
-      },
-
-    /* == TIMETABLE == */
-
-      /* Enhance timetable functionality */
-      fixTimetable: function() {
-        window.setInterval(function() {
-          if($("#gridcontainer").attr("data-bound") != "1") {
-            npu.runEval(function() {
-              var options = $("#gridcontainer").BcalGetOp();
-              if(typeof options != "undefined" && options != null) {
-                $("#gridcontainer").attr("data-bound", "1");
-                var callback = options.onAfterRequestData;
-                options.onAfterRequestData = function(n) {
-                  if($("#gridcontainer").attr("data-called") != "1") {
-                    $("#gridcontainer").attr("data-called", "1");
-                    $("#upFunction_c_common_timetable_upTimeTable .showtoday").trigger("click");
-                  }
-                  callback(n);
-                }
-              }
-            });
-          }
-        }, 100);
-      },
-
-    /* == MARK LIST == */
-
-      /* Enhance mark list style */
-      fixMarkList: function() {
-        $(
-          '<style type="text/css"> ' +
-            '#h_markbook_gridIndexEntry_bodytable tr.SubjectCompletedRow td ' +
-            '{ ' +
-              'background-color: #D5EFBA !important; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-      },
-
-    /* == PROGRESS LIST == */
-
-      /* Enhance progress list style */
-      fixProgressList: function() {
-        $(
-          '<style type="text/css"> ' +
-            '#h_advance_gridSubjects_bodytable tr:not(.gridrow_blue):not(.gridrow_green) td, ' +
-            '#h_advance_NonCurrTemp_bodytable tr:not(.gridrow_blue):not(.gridrow_green) td ' +
-            '{ ' +
-              'background-color: #F8EFB1 !important; ' +
-              'font-weight: bold; ' +
-              'color: #525659; ' +
-            '} ' +
-            '#h_advance_gridSubjects_bodytable tr.gridrow_green td, ' +
-            '#h_advance_NonCurrTemp_bodytable tr.gridrow_green td ' +
-            '{ ' +
-              'background-color: #D5EFBA !important; ' +
-              'font-weight: bold; ' +
-              'color: #525659; ' +
-            '} ' +
-            '#h_advance_gridSubjects_bodytable tr.gridrow_blue td, ' +
-            '#h_advance_NonCurrTemp_bodytable tr.gridrow_blue td ' +
-            '{ ' +
-              'background-color: none !important; ' +
-              'color: #525659; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-      },
-
-    /* == COURSE LIST == */
-
-      /* Enhance course list style and functionality */
-      fixCourseList: function() {
-        $(
-          '<style type="text/css"> ' +
-            '#h_addsubjects_gridSubjects_bodytable tr.Row1_Bold td, ' +
-            '#Addsubject_course1_gridCourses_bodytable tr.Row1_sel td, ' +
-            '#Addsubject_course1_gridCourses_grid_body_div tr.Row1_sel td, ' +
-            '#Addsubject_course1_gridCourses_bodytable tr.Row1_Bold_sel td, ' +
-            '#Addsubject_course1_gridCourses_grid_body_div tr.Row1_Bold_sel td, ' +
-            '#h_addsubjects_gridSubjects_bodytable tr.context_selectedrow td ' +
-            '{ ' +
-              'background-color: #F8EFB1 !important; ' +
-              'font-weight: bold; color: #525659; ' +
-            '} ' +
-            '#h_addsubjects_gridSubjects_bodytable tr, ' +
-            '#Addsubject_course1_gridCourses_bodytable tr, ' +
-            '#Addsubject_course1_gridCourses_grid_body_div tr ' +
-            '{ ' +
-              'cursor: pointer; ' +
-            '} ' +
-            '#h_addsubjects_gridSubjects_bodytable tr.npu_completed td, ' +
-            '#h_addsubjects_gridSubjects_bodytable tr.context_selectedrow[data-completed] td ' +
-            '{ ' +
-              'background-color: #D5EFBA !important; ' +
-              'font-weight: bold; ' +
-              'color: #525659; ' +
-            '} ' +
-            '#h_addsubjects_gridSubjects_bodytable tr.context_selectedrow ' +
-            '{ ' +
-              'border: 0 none !important; ' +
-              'border-bottom: 1px solid #D3D3D3 !important; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        $("body").on("click", "#Addsubject_course1_gridCourses_bodytable tbody td, #Addsubject_course1_gridCourses_grid_body_div tbody td", function(e) {
-          if($(e.target).closest("input[type=checkbox]").size() == 0 && $(e.target).closest("td[onclick]").size() == 0) {
-            var checkbox = $("input[type=checkbox]", $(this).closest("tr")).get(0);
-            checkbox.checked = !checkbox.checked;
-            npu.getAjaxInstance(this) &&
-              npu.getAjaxInstance(this).Cv($("input[type=checkbox]", $(this).closest("tr")).get(0), "1");
-            e.preventDefault();
-            return false;
-          }
-        });
-
-        $("body").on("click", "#h_addsubjects_gridSubjects_bodytable tbody td", function(e) {
-          if($(e.target).closest("td[onclick], span.link").size() == 0 && $(e.target).closest("td.contextcell_sel, td.contextcell").size() == 0) {
-            npu.runEval($("td span.link", $(this).closest("tr")).attr("onclick"));
-            e.preventDefault();
-            return false;
-          }
-        });
-
-        window.setInterval(function() {
-          var table = $("#h_addsubjects_gridSubjects_bodytable");
-          if(table.attr("data-painted") != "1") {
-            table.attr("data-painted", "1");
-            $("tbody tr", table).each(function() {
-              if($('td[n="Completed"] img', this).size() != 0) {
-                $(this).addClass("npu_completed").attr("data-completed", "1");
-              }
-            });
-          }
-        }, 250);
-      },
-
-      /* Automatically press submit button on course list page */
-      initCourseAutoList: function() {
-        npu.runEval(function() {
-          var manager = Sys.WebForms.PageRequestManager.getInstance();
-          var courseListLoading = false;
-          manager.add_beginRequest(function() {
-            courseListLoading = true;
-          });
-          manager.add_endRequest(function() {
-            courseListLoading = false;
-          });
-          window.setInterval(function() {
-            if(!courseListLoading && $("#h_addsubjects_gridSubjects_gridmaindiv").size() == 0) {
-              $("#upFilter_expandedsearchbutton").click();
-            }
-          }, 250);
-        });
-
-        var updateTable = function() {
-          $("#upFunction_h_addsubjects_upGrid").html("");
-        };
-
-        $("body").on("change", "#upFilter_chkFilterCourses", updateTable);
-        $("body").on("change", "#upFilter_rbtnSubjectType input[type=radio]", updateTable);
-      },
-
-      /* Initialize course choice storage and mark subject and course lines with stored course choices */
-      initCourseStore: function() {
-        $(
-          '<style type="text/css"> ' +
-            '#h_addsubjects_gridSubjects_bodytable tr td.npu_choice_mark, ' +
-            '#Addsubject_course1_gridCourses_bodytable tr td.npu_choice_mark, ' +
-            '#Addsubject_course1_gridCourses_grid_body_div tr td.npu_choice_mark ' +
-            '{ ' +
-              'background: #C00 !important; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        var loadCourses = function() {
-          courses = { };
-          $.extend(courses, npu.getUserData(null, null, ["courses", "_legacy"]));
-          $.extend(courses, npu.getUserData(null, null, ["courses", npu.training]));
-        };
-
-        var refreshScreen = function() {
-          $("#h_addsubjects_gridSubjects_bodytable").attr("data-choices-displayed", "0");
-          $("#Addsubject_course1_gridCourses_bodytable").attr("data-inner-choices-displayed", "0");
-          $("#Addsubject_course1_gridCourses_grid_body_div").attr("data-inner-choices-displayed", "0");
-        };
-
-        var courses = null;
-        loadCourses();
-
-        window.setInterval(function() {
-          var table = $("#h_addsubjects_gridSubjects_bodytable");
-          if(table.size() > 0 && table.attr("data-choices-displayed") != "1") {
-            table.attr("data-choices-displayed", "1");
-            var filterEnabled = npu.getUserData(null, null, "filterCourses");
-            $("tbody tr", table).each(function() {
-              var subjectCode = $("td:nth-child(3)", this).text().trim().toUpperCase();
-              var choices = courses[subjectCode.trim().toUpperCase()];
-              if(typeof choices != "undefined" && choices != null && choices.length > 0) {
-                $("td:first-child", this).addClass("npu_choice_mark");
-                $(this).css("display", "table-row");
-              }
-              else {
-                $("td:first-child", this).removeClass("npu_choice_mark");
-                $(this).css("display", filterEnabled ? "none" : "table-row");
-              }
-            });
-
-            if($("#h_addsubjects_gridSubjects_gridmaindiv .grid_pagertable .grid_pagerpanel").size() === 0) {
-              $('<td class="grid_pagerpanel"><table align="right"><tbody><tr></tr></tbody></table></td>').
-                insertBefore("#h_addsubjects_gridSubjects_gridmaindiv .grid_pagertable .grid_pagerrow_right");
-            }
-
-            var pager = $("#h_addsubjects_gridSubjects_gridmaindiv .grid_pagertable .grid_pagerpanel table tr");
-            if($("#npu_clear_courses").size() == 0) {
-              var clearAll = $('<td id="npu_clear_courses"><a style="color: #C00; line-height: 17px; margin-right: 30px" href="">Tárolt kurzusok törlése</a></td>');
-              $("a", clearAll).click(function(e) {
-                e.preventDefault();
-                if(confirm(npu.user + " felhasználó összes tárolt kurzusa törölve lesz ezen a képzésen. Valóban ezt szeretnéd?")) {
-                  npu.setUserData(null, null, ["courses", npu.training], { });
-                  npu.setUserData(null, null, ["courses", "_legacy"], { });
-                  npu.setUserData(null, null, "filterCourses", false);
-                  npu.saveData();
-                  loadCourses();
-                  refreshScreen();
-                }
-              });
-              pager.prepend(clearAll);
-            }
-            if($("#npu_filter_courses").size() == 0) {
-              var filterCell = $('<td id="npu_filter_courses" style="padding-right: 30px; line-height: 17px"><input type="checkbox" id="npu_filter_field" style="vertical-align: middle" />&nbsp;&nbsp;<label for="npu_filter_field">Csak a tárolt kurzusok megjelenítése</label></td>');
-              $("input", filterCell).change(function() {
-                npu.setUserData(null, null, "filterCourses", $(this).get(0).checked);
-                npu.saveData();
-                refreshScreen();
-              });
-              pager.prepend(filterCell);
-            }
-            $("#npu_filter_field").get(0).checked = filterEnabled;
-          }
-
-          var innerTable = $("#Addsubject_course1_gridCourses_bodytable:visible, #Addsubject_course1_gridCourses_grid_body_div:visible").first();
-          if(innerTable.size() > 0 && innerTable.attr("data-inner-choices-displayed") != "1") {
-            innerTable.attr("data-inner-choices-displayed", "1");
-            if($("th.headerWithCheckbox", innerTable).size() == 0) {
-              var objName = npu.getAjaxInstanceId(this);
-              $('<th id="head_chk" class="headerWithCheckbox headerDisabled" colname="chk" title="Válasszon ki legalább egyet!" align="center"><label class="hiddenforlabel" for="Addsubject_course1_gridCourses_bodytable_chk_chkall">Összes kijelölése</label><span></span><input aria-disabled="false" role="checkbox" id="Addsubject_course1_gridCourses_bodytable_chk_chkall" onclick="' + objName + '.AllCheckBox(this.checked,\'chk\',true,1,this)" type="checkbox"><span></span></th>').appendTo("#Addsubject_course1_gridCourses_headerrow");
-              $("tbody tr", innerTable).each(function() {
-                $('<td t="chks" n="chk" class="aligncenter"><label class="hiddenforlabel" for="chk' + $(this).attr("id").substring(4) + '">' + $("td:nth-child(2)", this).text().trim() + '</label><input id="chk' + $(this).attr("id").substring(4) + '" aria-disabled="false" role="checkbox" onclick="' + objName + '.Cv(this,\'1\');" type="checkbox"></td>').appendTo(this);
-              });
-            }
-            $("tbody tr", innerTable).each(function() {
-              $("input[type=checkbox]", this).removeAttr("disabled");
-            });
-            var subjectText = $("#Subject_data_for_schedule_ctl00:visible > div > div > h2").html();
-            if(subjectText != null) {
-              var part = subjectText.split("<br>")[0];
-              var subjectCode = npu.parseSubjectCode(part);
-              if(subjectCode) {
-                var choices = courses[subjectCode.trim().toUpperCase()];
-                var hasChoices = (typeof choices != "undefined" && choices != null && choices.length > 0);
-                if(hasChoices) {
-                  $("tbody tr", innerTable).each(function() {
-                    var courseCode = $("td:nth-child(2)", this).text().trim().toUpperCase();
-                    if($.inArray(courseCode, choices) != -1) {
-                      $("td:first-child", this).addClass("npu_choice_mark");
-                    }
-                    else {
-                      $("td:first-child", this).removeClass("npu_choice_mark");
-                    }
-                  });
-                }
-                else {
-                  $("tbody tr td:first-child", innerTable).removeClass("npu_choice_mark");
-                }
-                if($(".npu_course_choice_actions").size() == 0) {
-                  var header = $("#Addsubject_course1_gridCourses_gridmaindiv .grid_functiontable_top .functionitem");
-                  var footer = $("#Addsubject_course1_gridCourses_tablebottom .grid_functiontable_bottom .functionitem");
-                  var canSave = header.size() > 0;
-                  if(header.size() == 0) {
-                    $('<table class="grid_functiontable_top" align="left"><tbody><tr><td class="functionitem" nowrap=""></td></tr></tbody></table>').appendTo("#Addsubject_course1_gridCourses_gridmaindiv .grid_topfunctionpanel");
-                    header = $(header.selector);
-                  }
-                  if(footer.size() == 0) {
-                    $('<table class="grid_functiontable_bottom" align="right"><tbody><tr><td class="functionitem" nowrap=""></td></tr></tbody></table>').appendTo("#Addsubject_course1_gridCourses_tablebottom .grid_bottomfunctionpanel");
-                    footer = $(footer.selector);
-                  }
-                  var buttonBarExtensions = $('<span class="npu_course_choice_actions" style="margin: 0 20px"><span class="FunctionCommandTitle">Tárolt kurzusok:</span><input type="button" value="Tárolás" class="gridbutton npu_course_choice_save"><input type="button" value="Betöltés" class="gridbutton npu_course_choice_load" style="display: none">' + (canSave ? '<input type="button" value="Betöltés és Mentés" class="gridbutton npu_course_choice_apply" style="display: none">' : "") + '<input type="button" value="Törlés" class="gridbutton npu_course_choice_delete" style="display: none"></span>');
-                  header.append(buttonBarExtensions);
-                  footer.prepend(buttonBarExtensions.clone());
-                  $(".npu_course_choice_actions .npu_course_choice_save").click(function() {
-                    var selectedCourses = [];
-                    $("tbody tr", innerTable).each(function() {
-                      var courseCode = $("td:nth-child(2)", this).text().trim().toUpperCase();
-                      var checkbox = $("input[type=checkbox]", this).get(0);
-                      if(checkbox.checked) {
-                        selectedCourses.push(courseCode);
-                      }
-                    });
-                    if(selectedCourses.length == 0) {
-                      alert("A tároláshoz előbb válaszd ki a tárolandó kurzusokat.");
-                    }
-                    else {
-                      npu.setUserData(null, null, ["courses", npu.training, subjectCode.trim().toUpperCase()], selectedCourses);
-                      npu.saveData();
-                      loadCourses();
-                      refreshScreen();
-                    }
-                  });
-                  $(".npu_course_choice_actions .npu_course_choice_load").click(function() {
-                    $("tbody tr", innerTable).each(function() {
-                      var courseCode = $("td:nth-child(2)", this).text().trim().toUpperCase();
-                      var checkbox = $("input[type=checkbox]", this).get(0);
-                      checkbox.checked = $.inArray(courseCode, courses[subjectCode.trim().toUpperCase()]) != -1;
-                      npu.getAjaxInstance(this) && npu.getAjaxInstance(this).Cv(checkbox, "1");
-                    });
-                  });
-                  $(".npu_course_choice_actions .npu_course_choice_apply").click(function() {
-                    npu.runEval(function() {
-                      $(".npu_course_choice_actions .npu_course_choice_load").trigger("click");
-                    });
-                    npu.getAjaxInstance(this) && npu.getAjaxInstance(this).SelectFunction("update");
-                  });
-                  $(".npu_course_choice_actions .npu_course_choice_delete").click(function() {
-                    if(confirm("Valóban törölni szeretnéd a tárolt kurzusokat?")) {
-                      npu.setUserData(null, null, ["courses", npu.training, subjectCode.trim().toUpperCase()], null);
-                      npu.setUserData(null, null, ["courses", "_legacy", subjectCode.trim().toUpperCase()], null);
-                      npu.saveData();
-                      loadCourses();
-                      refreshScreen();
-                    }
-                  });
-                }
-                $(".npu_course_choice_load, .npu_course_choice_apply, .npu_course_choice_delete", $(".npu_course_choice_actions")).css("display", hasChoices ? "inline" : "none");
-              }
-            }
-          }
-        }, 500);
-      },
-
-    /* == EXAM LIST == */
-
-      /* Returns if the given string stands for a passing grade */
-      isPassingGrade: function(str) {
-        return [
-          "jeles",               "excellent",
-          "jó",                  "good",
-          "közepes",             "satisfactory",
-          "elégséges",           "pass",
-          "kiválóan megfelelt",  "excellent",
-          "megfelelt",           "average",
-        ].some(function(item) {
-          return str.toLowerCase().indexOf(item) !== -1;
-        });
-      },
-
-      /* Returns if the given string stands for a failing grade */
-      isFailingGrade: function(str) {
-        return [
-          "elégtelen",           "fail",
-          "nem felelt meg",      "unsatisfactory",
-          "nem jelent meg",      "did not attend",
-          "nem vizsgázott",      "did not attend",
-        ].some(function(item) {
-          return str.toLowerCase().indexOf(item) !== -1;
-        });
-      },
-
-      /* Enhance exam list style and functionality */
-      fixExamList: function() {
-        $(
-          '<style type="text/css"> ' +
-            '#h_exams_gridExamList_bodytable tr.gridrow_blue td ' +
-            '{ ' +
-              'background-color: #F8EFB1 !important; ' +
-              'font-weight: bold; ' +
-              'color: #525659 !important; ' +
-            '} ' +
-            '#h_exams_gridExamList_bodytable tr.npu_completed td ' +
-            '{ ' +
-              'background-color: #D5EFBA !important; ' +
-            '} ' +
-            '#h_exams_gridExamList_bodytable tr.npu_failed td ' +
-            '{ ' +
-              'background-color: #F2A49F !important; ' +
-              'color: #3A3C3E !important; ' +
-            '} ' +
-            '#h_exams_gridExamList_bodytable tr.npu_hidden ' +
-            '{ ' +
-              'display: none; ' +
-            '} ' +
-            '#h_exams_gridExamList_bodytable tr ' +
-            '{ ' +
-              'cursor: pointer; ' +
-            '} ' +
-            '#upFilter_cmbSubjects option[value="0"] ' +
-            '{ ' +
-              'font-size: 13px; ' +
-              'font-weight: bold; ' +
-              'text-decoration: underline; ' +
-            '} ' +
-            '#upFilter_cmbSubjects option.npu_hidden ' +
-            '{ ' +
-              'display: none; ' +
-            '} ' +
-            '#upFilter_cmbSubjects option.npu_subscribed ' +
-            '{ ' +
-              'background-color: #F8EFB1 !important; ' +
-              'font-weight: bold; ' +
-            '} ' +
-            '#upFilter_cmbSubjects option.npu_completed ' +
-            '{ ' +
-              'background-color: #D5EFBA !important; ' +
-            '} ' +
-            '#upFilter_cmbSubjects option.npu_failed ' +
-            '{ ' +
-              'background-color: #F2A49F !important; ' +
-              'color: #3A3C3E !important; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        $("body").on("click", "#h_exams_gridExamList_bodytable tbody td", function(e) {
-          if($(e.target).closest("td[onclick], td.contextcell_sel, td.contextcell").size() == 0) {
-            npu.runEval(function() {
-              $("td.contextcell, td.contextcell_sel", $(this).closest("tr")).trigger("click");
-            });
-            e.preventDefault();
-            return false;
-          }
-        });
-
-        /* Exam classes listed from most important to least important */
-        var classPrecedence = ["npu_subscribed", "npu_failed", "npu_completed", "npu_regular"].reverse();
-
-        /* Selects the class with the higher precedence from the two provided classes */
-        var selectImportantClass = function(one, two) {
-          /* Invalid classes have an index of -1 so they are never selected in favor of a valid one */
-          return classPrecedence.indexOf(one) > classPrecedence.indexOf(two) ? one : two;
-        };
-
-        window.setInterval(function() {
-          var table = $("#h_exams_gridExamList_bodytable");
-          var filterEnabled = npu.getUserData(null, null, "filterExams");
-
-          if(table.attr("data-processed") != "1") {
-            table.attr("data-processed", "1");
-
-            $("tbody tr[id*=tr__]", table).each(function() {
-              var row = $(this);
-              var courseCode = $("td:nth-child(3)", row).clone().children().remove().end().text();
-              var rowId = row.attr("id").replace(/^tr__/, "");
-              var subRow = $("#trs__" + rowId, row.closest("tbody"));
-              var markRows = $(".subtable > tbody > tr", subRow);
-
-              row.add(markRows).removeClass(classPrecedence.join(" "));
-
-              markRows.each(function() {
-                var grade = $("td:nth-child(4)", this).text().trim();
-                npu.isPassingGrade(grade) && $(this).addClass("npu_completed");
-                npu.isFailingGrade(grade) && $(this).addClass("npu_failed");
-              });
-
-              var rowClass = row.hasClass("gridrow_blue") ? "npu_subscribed" : "npu_regular";
-
-              if(markRows.size() > 0) {
-                var lastMark = markRows.last();
-                var grade = $("td:nth-child(4)", lastMark).text().trim();
-                /* The class 'npu_subscribed' has a higher precedence than these, so it will not get overwritten */
-                rowClass = selectImportantClass(rowClass, npu.isPassingGrade(grade) && "npu_completed");
-                rowClass = selectImportantClass(rowClass, npu.isFailingGrade(grade) && "npu_failed");
-
-                if(rowClass === "npu_completed") {
-                  row.add(subRow)[filterEnabled ? "addClass" : "removeClass"]("npu_hidden");
-                }
-              }
-
-              row.addClass(rowClass);
-
-              if(!$("#upFilter_cmbSubjects").val() || $("#upFilter_cmbSubjects").val() === "0") {
-                $.examSubjectFilterCache = $.examSubjectFilterCache || {};
-                /* Only overwrite the class if it has a higher precedence than the previous one */
-                $.examSubjectFilterCache[courseCode] = selectImportantClass(
-                  $.examSubjectFilterCache[courseCode], rowClass
-                );
-              }
-            });
-
-            if($.examSubjectFilterCache) {
-              $("#upFilter_cmbSubjects > option").each(function() {
-                $(this).removeClass("npu_hidden " + classPrecedence.join(" "));
-                var subjectCode = npu.parseSubjectCode($(this).text().trim());
-                var rowClass = $.examSubjectFilterCache[subjectCode];
-                var filterEnabled = npu.getUserData(null, null, "filterExams");
-                subjectCode && $(this).addClass(rowClass || "npu_hidden");
-                filterEnabled && rowClass === "npu_completed" && $(this).addClass("npu_hidden");
-              });
-            }
-          }
-        }, 250);
-
-        window.setInterval(function() {
-          var filterEnabled = npu.getUserData(null, null, "filterExams");
-          var pager = $("#h_exams_gridExamList_gridmaindiv .grid_pagertable .grid_pagerpanel table tr");
-          if($("#npu_filter_exams").size() == 0) {
-            var filterCell = $('<td id="npu_filter_exams" style="padding-right: 30px; line-height: 17px"><input type="checkbox" id="npu_filter_field" style="vertical-align: middle" />&nbsp;&nbsp;<label for="npu_filter_field">Teljesített tárgyak elrejtése</label></td>');
-            $("input", filterCell).change(function() {
-              npu.setUserData(null, null, "filterExams", $(this).get(0).checked);
-              npu.saveData();
-              npu.runEval(function() {
-                $("#upFilter_expandedsearchbutton").click();
-              });
-            });
-            pager.prepend(filterCell);
-          }
-          $("#npu_filter_field").get(0).checked = filterEnabled;
-        }, 500);
-      },
-
-      /* Automatically list exams on page load and subject change */
-      initExamAutoList: function() {
-        $('<style type="text/css"> #upFilter_bodytable tr.nostyle { display: none } </style>').appendTo("head");
-        $("body").on("change", "#upFilter_cmbSubjects", function() {
-          $.examListSubjectValue = $(this).val();
-        });
-        window.setInterval(function() {
-          var panel = $("#upFilter_panFilter table.searchpanel");
-          var termChanged = $.examListTerm != $("#upFilter_cmbTerms option[selected]").attr("value");
-          var subjectChanged = $.examListSubject != $.examListSubjectValue;
-
-          if(panel.attr("data-listing") != "1" && (termChanged || subjectChanged)) {
-            panel.attr("data-listing", "1");
-            if(termChanged) {
-              $.examSubjectFilterCache = null;
-            }
-            $.examListTerm = $("#upFilter_cmbTerms option[selected]").attr("value");
-            $.examListSubject = $.examListSubjectValue;
-            npu.runEval(function() {
-              $("#upFilter_expandedsearchbutton").click();
-            });
-          }
-        }, 100);
-      },
-
-    /* == SIGNED EXAM LIST == */
-
-      /* Enhance signed exam list style and functionality */
-      fixSignedExamList: function() {
-        $(
-          '<style type="text/css"> ' +
-            '#h_signedexams_gridExamList_bodytable tr.npu_missed td ' +
-            '{ ' +
-              'background-color: #F8EFB1 !important; ' +
-              'color: #525659 !important; ' +
-            '} ' +
-            '#h_signedexams_gridExamList_bodytable tr.npu_completed td ' +
-            '{ ' +
-              'background-color: #D5EFBA !important; ' +
-            '} ' +
-            '#h_signedexams_gridExamList_bodytable tr.npu_failed td ' +
-            '{ ' +
-              'background-color: #F2A49F !important; ' +
-              'color: #3A3C3E !important; ' +
-            '} ' +
-          '</style>'
-        ).appendTo("head");
-
-        window.setInterval(function() {
-          var table = $("#h_signedexams_gridExamList_bodytable");
-
-          if(table.attr("data-processed") != "1") {
-            table.attr("data-processed", "1");
-
-            $("tbody tr:not(.NoMatch)", table).each(function() {
-              var row = $(this);
-              row.removeClass("npu_completed npu_failed npu_missed");
-              var cells = row.children('td').length;
-              var attended = $("td[n=Attended]", row)[0].attributes["checked"].value == "true";
-
-              var grade;
-              if(cells <= 15)
-                grade = $("td:nth-child(13)", row).text().trim();
-              else {
-                // Neptun build 454 introduced an extra column to show justified absence.
-                // In this case, consider such exams "attended". Because of no grade,
-                // they won't be coloured.
-                attended = attended || $("td[n=JustifiedMissing]", row)[0].attributes["checked"].value == "true";
-                
-                if(cells <= 16) {
-                  grade = $("td:nth-child(14)", row).text().trim();
-                } else {
-                  // Neptun build 456 introduced ANOTHER extra column, now the signed exams
-                  // are listed with rows: "counts as exam", "attended", "justified absence".
-                  grade = $("td:nth-child(15)", row).text().trim();
-                }
-              }
-
-              if(attended) {
-                npu.isPassingGrade(grade) && row.addClass("npu_completed");
-                npu.isFailingGrade(grade) && row.addClass("npu_failed");
-              }
-              else {
-                row.addClass("npu_missed");
-              }
-            });
-          }
-        }, 250);
-      },
-
-    /* == MISC == */
-
-      /* Verify that we are indeed on a Neptun page */
-      isNeptunPage: function() {
-        return document.title.indexOf("Neptun.Net") != -1;
-      },
-
-      /* Initialize and cache parameters that do not change dynamically */
-      initParameters: function() {
-        npu.user = npu.getUser();
-        npu.domain = npu.getDomain();
-        npu.training = npu.getTraining();
-      },
-
-      /* Parses and returns the first-level domain of the site */
-      getDomain: function() {
-        var domain = "", host = location.host.split(".");
-        var tlds = ["at", "co", "com", "edu", "eu", "gov", "hu", "hr", "info", "int", "mil", "net", "org", "ro", "rs", "sk", "si", "ua", "uk"];
-        for(var i = host.length - 1; i >= 0; i--) {
-          domain = host[i] + "." + domain;
-          if($.inArray(host[i], tlds) == -1) {
-            return domain.substring(0, domain.length - 1);
-          }
-        }
-      },
-
-      /* Parses and returns the ID of the current user */
-      getUser: function() {
-        if($("#upTraining_topname").size() > 0) {
-          var input = $("#upTraining_topname").text();
-          return input.substring(input.indexOf(" - ") + 3).toUpperCase();
-        }
-      },
-
-      /* Parses and returns the sanitized name of the current training */
-      getTraining: function() {
-        if($("#lblTrainingName").size() > 0) {
-          return $("#lblTrainingName").text().replace(/[^a-zA-Z0-9]/g, "");
-        }
-      },
-
-      /* Returns whether we are on the login page */
-      isLogin: function() {
-        return $("td.login_left_side").size() > 0;
-      },
-
-      /* Returns the ID of the current page */
-      getPage: function() {
-        var result = (/ctrl=([a-zA-Z0-9_]+)/g).exec(window.location.href);
-        return result ? result[1] : null;
-      },
-
-      /* Get the current AJAX grid instance */
-      getAjaxInstance: function(element) {
-        return npu.getAjaxInstanceId(element) && unsafeWindow[npu.getAjaxInstanceId(element)];
-      },
-
-      getAjaxInstanceId: function(element) {
-        var ajaxGrid = $(element).closest("div[type=ajaxgrid]");
-        return ajaxGrid.size() > 0 && ajaxGrid.first().attr("instanceid");
-      },
-
-      /* Returns whether the specified ID is the current page */
-      isPage: function(ctrl) {
-        return (window.location.href.indexOf("ctrl=" + ctrl) != -1);
-      },
-
-      /* Runs a function asynchronously to fix problems in certain cases */
-      runAsync: function(func) {
-        window.setTimeout(func, 0);
-      },
-
-      /* Evaluates code in the page context */
-      runEval: function(source) {
-        if ("function" == typeof source) {
-          source = "(" + source + ")();"
-        }
-        var script = document.createElement('script');
-        script.setAttribute("type", "application/javascript");
-        script.textContent = source;
-        document.body.appendChild(script);
-        document.body.removeChild(script);
-      },
-
-      /* Returns the child object at the provided path */
-      getChild: function(o, s) {
-        while(s.length) {
-          var n = s.shift();
-          if(!(o instanceof Object && n in o)) {
-            return;
-          }
-          o = o[n];
-        }
-        return o;
-      },
-
-      /* Set the child object at the provided path */
-      setChild: function(o, s, v) {
-        while(s.length) {
-          var n = s.shift();
-          if(s.length == 0) {
-            if(v == null) {
-              delete o[n];
-            }
-            else {
-              o[n] = v;
-            }
-            return;
-          }
-          if(!(typeof o == "object" && n in o)) {
-            o[n] = new Object();
-          }
-          o = o[n];
-        }
-      },
-
-      /* Parses a subject code that is in parentheses at the end of a string */
-      parseSubjectCode: function(str) {
-        str = str.trim();
-        if(str.charAt(str.length - 1) == ')') {
-          var depth = 0;
-          for(var i = str.length - 2; i >= 0; i--) {
-            var c = str.charAt(i);
-            if(depth == 0 && c == '(') {
-              return str.substring(i + 1, str.length - 1);
-            }
-            depth = c == ')' ? depth + 1 : depth;
-            depth = c == '(' && depth > 0 ? depth - 1 : depth;
-          }
-        }
-        return null;
-      },
-
-      /* Generates a random token */
-      generateToken: function() {
-        var text = "", possible = "0123456789abcdef";
-        for(var i = 0; i < 32; i++) {
-          text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
-      },
-
-      /* Encodes a string into base64 */
-      encodeBase64: function(data) {
-        var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-        var o1, o2, o3, h1, h2, h3, h4, bits, i = 0, ac = 0, enc = "", tmp_arr = [];
-        if(!data) {
-          return data;
-        }
-        do {
-          o1 = data.charCodeAt(i++); o2 = data.charCodeAt(i++); o3 = data.charCodeAt(i++);
-          bits = o1 << 16 | o2 << 8 | o3;
-          h1 = bits >> 18 & 0x3f; h2 = bits >> 12 & 0x3f; h3 = bits >> 6 & 0x3f; h4 = bits & 0x3f;
-          tmp_arr[ac++] = b64.charAt(h1) + b64.charAt(h2) + b64.charAt(h3) + b64.charAt(h4);
-        } while(i < data.length);
-        enc = tmp_arr.join("");
-        var r = data.length % 3;
-        return (r ? enc.slice(0, r - 3) : enc) + '==='.slice(r || 3);
-      },
-
-      /* Decodes a string from base64 */
-      decodeBase64: function(data) {
-        var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-        var o1, o2, o3, h1, h2, h3, h4, bits, i = 0, ac = 0, dec = "", tmp_arr = [];
-        if (!data) {
-          return data;
-        }
-        data += "";
-        do {
-          h1 = b64.indexOf(data.charAt(i++)); h2 = b64.indexOf(data.charAt(i++)); h3 = b64.indexOf(data.charAt(i++)); h4 = b64.indexOf(data.charAt(i++));
-          bits = h1 << 18 | h2 << 12 | h3 << 6 | h4;
-          o1 = bits >> 16 & 0xff; o2 = bits >> 8 & 0xff; o3 = bits & 0xff;
-          tmp_arr[ac++] = (h3 == 64 ? String.fromCharCode(o1) : (h4 == 64 ? String.fromCharCode(o1, o2) : String.fromCharCode(o1, o2, o3)));
-        } while(i < data.length);
-        dec = tmp_arr.join("");
-        return dec;
-      }
+/******/ (() => { // webpackBootstrap
+/******/ 	var __webpack_modules__ = ({
+
+/***/ 793:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const utils = __webpack_require__(413);
+
+const badgeId = "nnpu-login-active-badge";
+const footerFlagAttr = "data-nnpu-version";
+const outageCardId = "nnpu-login-outage-card";
+const themeKey = "nnpu-theme";
+const darkModeClass = "nnpu-dark-mode";
+const rootFixPath = "/hallgatoi";
+const recoveryAttemptKey = "nnpu-loading-recovery-attempt";
+const recoveryLastAttemptKey = "nnpu-loading-recovery-last-at";
+const recoveryDelayMs = 1200;
+const recoveryCooldownMs = 2500;
+
+// ─── School name resolver ─────────────────────────────────────────────────────
+
+const SCHOOL_MAP = [
+  { pattern: /\bbme\b/i,       name: "BME" },
+  { pattern: /corvinus/i,      name: "Corvinus" },
+  { pattern: /szte\b/i,        name: "SZTE" },
+  { pattern: /\bpte\b/i,       name: "PTE" },
+  { pattern: /\belte\b/i,      name: "ELTE" },
+  { pattern: /\bde\b/i,        name: "DE" },
+  { pattern: /\bme\b/i,        name: "ME" },
+  { pattern: /\boe\b/i,        name: "ÓE" },
+  { pattern: /\bsoe\b/i,       name: "SoE" },
+  { pattern: /\bnke\b/i,       name: "NKE" },
+  { pattern: /\bke\b/i,        name: "KE" },
+  { pattern: /\bszie\b/i,      name: "SZIE" },
+  { pattern: /\bbgf\b/i,       name: "BGF" },
+  { pattern: /\bbge\b/i,       name: "BGE" },
+  { pattern: /\bszfe\b/i,      name: "SZFE" },
+  { pattern: /obuda|óbuda/i,   name: "ÓE" },
+  { pattern: /miskolc/i,       name: "ME" },
+  { pattern: /debrecen/i,      name: "DE" },
+  { pattern: /pecs|pécs/i,     name: "PTE" },
+];
+
+function resolveSchoolName() {
+  const host = window.location.hostname;
+  for (const entry of SCHOOL_MAP) {
+    if (entry.pattern.test(host)) {
+      return entry.name;
+    }
+  }
+  // Capitalise the leftmost meaningful subdomain part as a fallback
+  const parts = host.replace(/\.neptun\..*$/, "").split(".");
+  const candidate = parts[0] || parts[parts.length - 1] || "az egyetem";
+  return candidate.toUpperCase();
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+function isAngularHallgatoiPage() {
+  return /\/hallgatoi(\/|$)/i.test(window.location.pathname);
+}
+
+function isAngularLoginPage() {
+  return /:\/\/.*neptun.*\/hallgatoi\/login/i.test(window.location.href);
+}
+
+function getStoredTheme() {
+  try {
+    return window.localStorage.getItem(themeKey);
+  } catch (e) {
+    return null;
+  }
+}
+
+function shouldUseDarkMode() {
+  const storedTheme = getStoredTheme();
+  if (storedTheme === "dark") {
+    return true;
+  }
+  if (storedTheme === "light") {
+    return false;
+  }
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
+function applyStoredThemeClass() {
+  if (!document.body) {
+    return;
+  }
+  document.body.classList.toggle(darkModeClass, shouldUseDarkMode());
+}
+
+function getAngularRootUrl(forceReload = false) {
+  const match = window.location.pathname.match(/^(.*\/hallgatoi)(?:\/.*)?$/i);
+  const targetPath = ((match && match[1]) || rootFixPath).replace(/\/?$/, "/");
+  return forceReload ? `${window.location.origin}${targetPath}?nnpu-recover=${Date.now()}` : `${window.location.origin}${targetPath}`;
+}
+
+function navigateToRoot(forceReload = false) {
+  window.location.replace(getAngularRootUrl(forceReload));
+}
+
+function isAngularRootPath() {
+  const currentPath = window.location.pathname.replace(/\/?$/, "/");
+  const rootPath = new URL(getAngularRootUrl(false)).pathname.replace(/\/?$/, "/");
+  return currentPath === rootPath;
+}
+
+function injectStyles() {
+  utils.injectCss(`
+    #${badgeId} {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-family: LatoWeb, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #16a34a, #0f766e);
+      box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
+      white-space: nowrap;
+    }
+
+    #${outageCardId} {
+      width: min(92vw, 600px);
+      padding: 20px 22px;
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.97), rgba(242,243,251,0.95));
+      border: 1px solid rgba(9,67,217,0.12);
+      box-shadow: 0 20px 50px rgba(33,48,85,0.16);
+      font-family: LatoWeb, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: #213055;
+    }
+
+    #${outageCardId} .nnpu-outage-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #16a34a, #0f766e);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1px;
+      margin-bottom: 12px;
+    }
+
+    #${outageCardId} h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.15;
+    }
+
+    #${outageCardId} .nnpu-outage-sub {
+      margin: 0 0 14px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #425173;
+    }
+
+    #${outageCardId} .nnpu-outage-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    #${outageCardId} .nnpu-btn {
+      height: 40px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    #${outageCardId} .nnpu-btn:hover { opacity: 0.85; }
+
+    #${outageCardId} .nnpu-btn-primary {
+      background: #0943d9;
+      color: #fff;
+    }
+
+    #${outageCardId} .nnpu-outage-note {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #6a7892;
+    }
+
+    .${darkModeClass} #${outageCardId} {
+      background: linear-gradient(145deg, rgba(22, 29, 41, 0.98), rgba(17, 24, 39, 0.96));
+      border-color: rgba(125, 157, 214, 0.18);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      color: #dbe6ff;
+    }
+
+    .${darkModeClass} #${outageCardId} .nnpu-outage-sub {
+      color: #aebddb;
+    }
+
+    .${darkModeClass} #${outageCardId} .nnpu-outage-note {
+      color: #92a3c4;
+    }
+
+    #loading-placeholder-index.nnpu-outage-mode {
+      gap: 24px;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(9,67,217,0.08), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(15,118,110,0.08), transparent 34%),
+        #ffffff;
+    }
+
+    .${darkModeClass} #loading-placeholder-index.nnpu-outage-mode {
+      background:
+        radial-gradient(circle at top left, rgba(77, 110, 173, 0.2), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.18), transparent 34%),
+        #0f1319;
+    }
+  `);
+}
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+function isPlaceholderOnlyState() {
+  const placeholder = document.getElementById("loading-placeholder-index");
+  const appRoot = document.querySelector("app-root");
+  if (!placeholder || !appRoot) return false;
+  return appRoot.children.length === 0;
+}
+
+function getRecoveryAttempt() {
+  try {
+    return parseInt(window.sessionStorage.getItem(recoveryAttemptKey) || "0", 10) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function setRecoveryAttempt(attempt) {
+  try {
+    window.sessionStorage.setItem(recoveryAttemptKey, String(attempt));
+  } catch (e) {}
+}
+
+function getRecoveryLastAttemptAt() {
+  try {
+    return parseInt(window.sessionStorage.getItem(recoveryLastAttemptKey) || "0", 10) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function setRecoveryLastAttemptAt(timestamp) {
+  try {
+    window.sessionStorage.setItem(recoveryLastAttemptKey, String(timestamp));
+  } catch (e) {}
+}
+
+function clearRecoveryAttempt() {
+  try {
+    window.sessionStorage.removeItem(recoveryAttemptKey);
+    window.sessionStorage.removeItem(recoveryLastAttemptKey);
+  } catch (e) {}
+}
+
+function triggerAutomaticRecovery() {
+  const attempt = getRecoveryAttempt();
+  const lastAttemptAt = getRecoveryLastAttemptAt();
+  const remainingCooldownMs = Math.max(0, recoveryCooldownMs - (Date.now() - lastAttemptAt));
+
+  if (remainingCooldownMs > 0) {
+    return {
+      attempt,
+      status: "cooldown",
+      waitMs: remainingCooldownMs,
+    };
+  }
+
+  const nextAttempt = attempt + 1;
+  setRecoveryAttempt(nextAttempt);
+  setRecoveryLastAttemptAt(Date.now());
+
+  window.setTimeout(() => {
+    if (isAngularRootPath()) {
+      window.location.reload();
+      return;
+    }
+
+    navigateToRoot(false);
+  }, recoveryDelayMs);
+
+  return {
+    attempt: nextAttempt,
+    status: "redirecting",
+    waitMs: recoveryDelayMs,
+  };
+}
+
+function getRecoveryNoteText(recoveryState) {
+  const fallbackState = recoveryState || {
+    attempt: getRecoveryAttempt(),
+    status: "redirecting",
   };
 
+  const safeAttempt = Math.max(1, fallbackState.attempt || 1);
+  if (fallbackState.status === "cooldown") {
+    return `Automatikus helyreállítás folyamatban. ${safeAttempt}. próbálkozás után rövid szünetet tartok, hogy a szerver fellélegezhessen.`;
+  }
+
+  return `Automatikus helyreállítás folyamatban. ${safeAttempt}. próbálkozás: visszalépés a /hallgatoi/ gyökéroldalra.`;
+}
+
+// ─── Outage card ──────────────────────────────────────────────────────────────
+
+async function showOutageCard(recoveryState = null) {
+  const placeholder = document.getElementById("loading-placeholder-index");
+  if (!placeholder || !isPlaceholderOnlyState()) {
+    return;
+  }
+
+  // Mark as outage mode
+  placeholder.classList.add("nnpu-outage-mode");
+
+  const school = resolveSchoolName();
+  let card = document.getElementById(outageCardId);
+  let note;
+
+  if (!card) {
+    card = document.createElement("section");
+    card.id = outageCardId;
+
+    const pill = document.createElement("div");
+    pill.className = "nnpu-outage-pill";
+    pill.textContent = `⚡ NNPU v${GM.info.script.version} Aktív`;
+    card.appendChild(pill);
+
+    const heading = document.createElement("h2");
+    heading.textContent = "A Neptun oldal most legalább stílusosan áll. 🥔";
+    card.appendChild(heading);
+
+    const sub = document.createElement("p");
+    sub.className = "nnpu-outage-sub";
+    sub.textContent = `Úgy tűnik, a ${school} szerverei épp valami fontosabb dologgal foglalkoznak – például léteznek. Az Angular bundle-ök ezen az oldalon nem álltak fel, ezért az NNPU automatikusan megpróbál visszalépni a tiszta /hallgatoi/ gyökéroldalra, rövid szünetekkel újrapróbálva.`;
+    card.appendChild(sub);
+
+    note = document.createElement("p");
+    note.className = "nnpu-outage-note";
+    card.appendChild(note);
+
+    placeholder.appendChild(card);
+  } else {
+    note = card.querySelector(".nnpu-outage-note");
+  }
+
+  if (note) {
+    note.textContent = getRecoveryNoteText(recoveryState);
+  }
+}
+
+// ─── Footer version tag ───────────────────────────────────────────────────────
+
+function appendFooterVersion() {
+  const footerVersion = document.querySelector(".footer__version");
+  if (!footerVersion || footerVersion.getAttribute(footerFlagAttr) === "1") {
+    return;
+  }
+  footerVersion.textContent = `${footerVersion.textContent.trim()} | NNPU v${GM.info.script.version}`;
+  footerVersion.setAttribute(footerFlagAttr, "1");
+}
+
+// ─── Main flow ────────────────────────────────────────────────────────────────
+
+async function showLoginBanner() {
+  if (!isAngularLoginPage()) return;
+
+  applyStoredThemeClass();
+  injectStyles();
+
+  // Short fuse: 1 second before giving up and showing the outage card
+  const caption = await utils.waitForElement("h4.login-right__caption", { timeoutMs: 1000 });
+  if (!caption || document.getElementById(badgeId)) {
+    // Angular didn't come up in time – show outage card and clear the
+    // auto-refresh key when content successfully arrives later.
+    showOutageCard();
+    appendFooterVersion();
+    return;
+  }
+
+  clearRecoveryAttempt();
+
+  const badge = document.createElement("span");
+  badge.id = badgeId;
+  badge.textContent = `⚡ NNPU v${GM.info.script.version} Aktív`;
+  caption.insertAdjacentElement("afterend", badge);
+  appendFooterVersion();
+}
+
+function initializeAngularOutageRecovery() {
+  if (!isAngularHallgatoiPage()) {
+    return;
+  }
+
+  applyStoredThemeClass();
+  injectStyles();
+  let recoveryCheckTimeoutId = null;
+
+  const scheduleRecoveryCheck = delayMs => {
+    if (recoveryCheckTimeoutId !== null) {
+      return;
+    }
+
+    recoveryCheckTimeoutId = window.setTimeout(() => {
+      recoveryCheckTimeoutId = null;
+      tryShowRecovery();
+    }, delayMs);
+  };
+
+  const tryShowRecovery = () => {
+    if (!isPlaceholderOnlyState()) {
+      clearRecoveryAttempt();
+      return false;
+    }
+
+    const recoveryState = triggerAutomaticRecovery();
+    showOutageCard(recoveryState);
+    appendFooterVersion();
+
+    if (recoveryState.status === "cooldown") {
+      scheduleRecoveryCheck(recoveryState.waitMs + 50);
+    }
+
+    return true;
+  };
+
+  if (tryShowRecovery()) {
+    return;
+  }
+
+  const observer = new MutationObserver(() => {
+    if (tryShowRecovery()) {
+      observer.disconnect();
+    }
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+
+  window.setTimeout(() => {
+    observer.disconnect();
+  }, 15000);
+}
+
+module.exports = {
+  shouldActivate: () => isAngularHallgatoiPage() || utils.isLoginPage(),
+  runOutsideNeptun: true,
+  initialize: () => {
+    if (document.readyState === "loading") {
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+          showLoginBanner();
+          initializeAngularOutageRecovery();
+        },
+        { once: true }
+      );
+      return;
+    }
+    showLoginBanner();
+    initializeAngularOutageRecovery();
+  },
+};
+
+
+/***/ }),
+
+/***/ 660:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const utils = __webpack_require__(413);
+
+const THEME_KEY = "nnpu-theme";
+const DARK_MODE_CLASS = "nnpu-dark-mode";
+const TOGGLE_ID = "nnpu-theme-toggle";
+const FOOTER_FLAG_ATTR = "data-nnpu-footer-active";
+let toggleWatcher = null;
+
+function getScriptVersion() {
+  try {
+    return GM && GM.info && GM.info.script && GM.info.script.version ? GM.info.script.version : "unknown";
+  } catch (e) {
+    return "unknown";
+  }
+}
+
+function isAngularHallgatoiPage() {
+  return /\/hallgatoi(\/|$)/i.test(window.location.pathname);
+}
+
+function getStoredTheme() {
+  try {
+    return window.localStorage.getItem(THEME_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+function getInitialDarkModeState() {
+  const storedTheme = getStoredTheme();
+  if (storedTheme === "dark") {
+    return true;
+  }
+  if (storedTheme === "light") {
+    return false;
+  }
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
+function persistTheme(isDarkMode) {
+  try {
+    window.localStorage.setItem(THEME_KEY, isDarkMode ? "dark" : "light");
+  } catch (e) {}
+}
+
+function updateToggleLabel(button, isDarkMode) {
+  if (!button) {
+    return;
+  }
+  button.setAttribute("aria-pressed", String(isDarkMode));
+  button.setAttribute("aria-label", isDarkMode ? "Vilagos tema" : "Sotet tema");
+  button.title = isDarkMode ? "Valtas vilagos temara" : "Valtas sotet temara";
+  button.setAttribute("data-icon", isDarkMode ? "☀" : "☾");
+}
+
+function ensureFooterStatus() {
+  const footerVersion = document.querySelector(".footer__version");
+  if (!footerVersion || footerVersion.getAttribute(FOOTER_FLAG_ATTR) === "1") {
+    return;
+  }
+
+  footerVersion.textContent = `${footerVersion.textContent.trim()} | NNPU aktiv v${getScriptVersion()}`;
+  footerVersion.setAttribute(FOOTER_FLAG_ATTR, "1");
+}
+
+function setDarkModeState(isDarkMode, persist = true) {
+  if (!document.body) {
+    return;
+  }
+  document.body.classList.toggle(DARK_MODE_CLASS, isDarkMode);
+  if (persist) {
+    persistTheme(isDarkMode);
+  }
+  updateToggleLabel(document.getElementById(TOGGLE_ID), isDarkMode);
+}
+
+function applyInitialDarkModeClass() {
+  const shouldUseDarkMode = getInitialDarkModeState();
+
+  const apply = () => {
+    if (!document.body) {
+      return false;
+    }
+    if (shouldUseDarkMode) {
+      document.body.classList.add(DARK_MODE_CLASS);
+    }
+    return true;
+  };
+
+  if (apply()) {
+    return;
+  }
+
+  const observer = new MutationObserver(() => {
+    if (apply()) {
+      observer.disconnect();
+    }
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function injectStyles() {
+  utils.injectCss(`
+    #${TOGGLE_ID} {
+      display: inline-flex;
+      position: relative;
+      align-items: center;
+      justify-content: center;
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      border: 1px solid #3a4357;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #2b3447, #141b27 68%);
+      color: #e0e0e0;
+      font-size: 0;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, background 0.35s ease;
+      z-index: 10002;
+      overflow: hidden;
+    }
+
+    #${TOGGLE_ID}::before,
+    #${TOGGLE_ID}::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      transition: opacity 0.35s ease, transform 0.45s ease;
+    }
+
+    #${TOGGLE_ID}::before {
+      background: radial-gradient(circle at 32% 32%, rgba(255, 224, 130, 0.96), rgba(255, 180, 64, 0.9) 45%, rgba(255, 180, 64, 0) 60%);
+      transform: scale(0.55);
+      opacity: 0;
+    }
+
+    #${TOGGLE_ID}::after {
+      content: attr(data-icon);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #eef3ff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+      transform: rotate(0deg) scale(1);
+    }
+
+    #${TOGGLE_ID}[aria-pressed="true"] {
+      background: radial-gradient(circle at 35% 30%, #334560, #182131 72%);
+      border-color: #4c5d7d;
+    }
+
+    #${TOGGLE_ID}[aria-pressed="true"]::before {
+      opacity: 1;
+      transform: scale(0.9);
+    }
+
+    #${TOGGLE_ID}[aria-pressed="false"]::before {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+
+    #${TOGGLE_ID}:hover {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+    }
+
+    #${TOGGLE_ID}:active {
+      transform: translateY(0) scale(0.96);
+    }
+
+    .login__header #${TOGGLE_ID} {
+      margin-left: auto;
+    }
+
+    #${TOGGLE_ID}.nnpu-theme-toggle-dashboard {
+      position: fixed;
+      bottom: 80px;
+      right: 16px;
+      margin: 0;
+    }
+
+    @media only screen and (max-width: 992px) {
+      #${TOGGLE_ID}.nnpu-theme-toggle-dashboard {
+        bottom: 76px;
+        right: 12px;
+      }
+
+      #${TOGGLE_ID} {
+        width: 42px;
+        height: 42px;
+      }
+    }
+
+    .${DARK_MODE_CLASS} {
+      background: #0f1319;
+      color: #e0e0e0;
+    }
+
+    .${DARK_MODE_CLASS} body {
+      background: #0f1319;
+      color: #e0e0e0;
+    }
+
+    .${DARK_MODE_CLASS} app-root,
+    .${DARK_MODE_CLASS} .layout,
+    .${DARK_MODE_CLASS} .app-main,
+    .${DARK_MODE_CLASS} .router-container,
+    .${DARK_MODE_CLASS} .primary-bg-wrapper,
+    .${DARK_MODE_CLASS} .neptun-wrapper {
+      background: transparent !important;
+      color: #e0e0e0;
+    }
+
+    .${DARK_MODE_CLASS} .neptun-wrapper.header {
+      background: #111827 !important;
+      color: #e8eefc !important;
+    }
+
+    .${DARK_MODE_CLASS} .header__left,
+    .${DARK_MODE_CLASS} .header__title {
+      background: transparent !important;
+      color: #e8eefc !important;
+    }
+
+    .${DARK_MODE_CLASS} .header__left {
+      display: flex !important;
+      align-items: center !important;
+      gap: 16px;
+    }
+
+    .${DARK_MODE_CLASS} .header__img-wrapper,
+    .${DARK_MODE_CLASS} .header__img {
+      flex: 0 0 auto;
+    }
+
+    .${DARK_MODE_CLASS} .header__img {
+      border: 2px solid #29364d;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+    }
+
+    .${DARK_MODE_CLASS} .header__title {
+      padding: 0;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .${DARK_MODE_CLASS} .header__title *,
+    .${DARK_MODE_CLASS} .header__title > * {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
+      white-space: nowrap;
+    }
+
+    .${DARK_MODE_CLASS} .institute-name {
+      background: #1b1f2a !important;
+      color: #dbe4ff !important;
+      border-color: #323a4d !important;
+    }
+
+    .${DARK_MODE_CLASS} #background-path,
+    .${DARK_MODE_CLASS} .background-path-bottom {
+      opacity: 0.06;
+      fill: #1b1f2a !important;
+    }
+
+    .${DARK_MODE_CLASS} header,
+    .${DARK_MODE_CLASS} .header {
+      background: #141a23 !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .${DARK_MODE_CLASS} .header__middle-title,
+    .${DARK_MODE_CLASS} .header__menu-title,
+    .${DARK_MODE_CLASS} .header__icon,
+    .${DARK_MODE_CLASS} .header__back-button {
+      color: #e4eaf8 !important;
+    }
+
+    .${DARK_MODE_CLASS} .search-trigger,
+    .${DARK_MODE_CLASS} .menu-trigger,
+    .${DARK_MODE_CLASS} .user-menu,
+    .${DARK_MODE_CLASS} .header__credit-counter {
+      background: #1c2533 !important;
+      color: #d6e0f5 !important;
+      border-color: #2e3a50 !important;
+    }
+
+    .${DARK_MODE_CLASS} .search-input,
+    .${DARK_MODE_CLASS} .search,
+    .${DARK_MODE_CLASS} .search .mat-mdc-text-field-wrapper,
+    .${DARK_MODE_CLASS} .search .mdc-text-field,
+    .${DARK_MODE_CLASS} .search .mat-mdc-form-field-flex,
+    .${DARK_MODE_CLASS} .search .mat-mdc-form-field-infix,
+    .${DARK_MODE_CLASS} .search .mat-mdc-form-field-focus-overlay {
+      background: #1c2533 !important;
+      color: #dbe6ff !important;
+      border-radius: 8px !important;
+    }
+
+    .${DARK_MODE_CLASS} .search .mdc-line-ripple,
+    .${DARK_MODE_CLASS} .search .mdc-line-ripple::before,
+    .${DARK_MODE_CLASS} .search .mdc-line-ripple::after {
+      border-bottom-color: #4f6b96 !important;
+    }
+
+    .${DARK_MODE_CLASS} .search__icon,
+    .${DARK_MODE_CLASS} .search__icon i,
+    .${DARK_MODE_CLASS} .icon-search {
+      color: #aecdff !important;
+    }
+
+    .${DARK_MODE_CLASS} .search input::placeholder,
+    .${DARK_MODE_CLASS} .mat-mdc-input-element::placeholder {
+      color: #8ea5cb !important;
+      opacity: 1;
+    }
+
+    .${DARK_MODE_CLASS} .widget,
+    .${DARK_MODE_CLASS} .mat-expansion-panel,
+    .${DARK_MODE_CLASS} .mat-accordion {
+      background: #171e2a !important;
+      color: #e0e0e0 !important;
+    }
+
+    .${DARK_MODE_CLASS} .widget__title,
+    .${DARK_MODE_CLASS} .widget__icon,
+    .${DARK_MODE_CLASS} .header__title,
+    .${DARK_MODE_CLASS} .footer__version,
+    .${DARK_MODE_CLASS} .footer__server-info {
+      color: #d6e0f5 !important;
+      opacity: 1 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-expansion-indicator::after,
+    .${DARK_MODE_CLASS} .icon-chevron-bottom {
+      color: #c6d6fa !important;
+      border-color: #c6d6fa !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-panel,
+    .${DARK_MODE_CLASS} .mdc-menu-surface,
+    .${DARK_MODE_CLASS} .mat-toolbar,
+    .${DARK_MODE_CLASS} .mat-toolbar-row,
+    .${DARK_MODE_CLASS} .menu-header,
+    .${DARK_MODE_CLASS} .enrollment-info {
+      background: #171e2a !important;
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-panel,
+    .${DARK_MODE_CLASS} .mdc-menu-surface {
+      border: 1px solid #2b3851 !important;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    .${DARK_MODE_CLASS} .menu-header__major-caption,
+    .${DARK_MODE_CLASS} .menu-header__major-name,
+    .${DARK_MODE_CLASS} .switch-training,
+    .${DARK_MODE_CLASS} .menu-item,
+    .${DARK_MODE_CLASS} .menu-item__icon {
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .mdc-list-item__primary-text {
+      color: #dbe6ff !important;
+      background: transparent !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:hover,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:focus,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item.cdk-program-focused,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item.cdk-keyboard-focused,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item.mdc-list-item--selected {
+      background: #233047 !important;
+      color: #ffffff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:hover .mdc-list-item__primary-text,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:focus .mdc-list-item__primary-text,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item.cdk-program-focused .mdc-list-item__primary-text,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item.cdk-keyboard-focused .mdc-list-item__primary-text,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:hover .menu-item,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:focus .menu-item,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:hover .menu-item__icon,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item:focus .menu-item__icon {
+      color: #ffffff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .icon-chevron-right,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .icon-open-indicator,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item [class*="chevron-right"],
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item [class*="arrow-right"],
+    .${DARK_MODE_CLASS} .menu-item .icon-chevron-right,
+    .${DARK_MODE_CLASS} .menu-item .icon-open-indicator,
+    .${DARK_MODE_CLASS} .menu-item__icon.icon-chevron-right,
+    .${DARK_MODE_CLASS} i[class*="chevron-right"],
+    .${DARK_MODE_CLASS} i[class*="arrow-right"],
+    .${DARK_MODE_CLASS} span[class*="chevron-right"],
+    .${DARK_MODE_CLASS} [class*="icon"] i[class*="chevron"] {
+      color: #bfd6ff !important;
+      border-color: #bfd6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .mat-ripple-element,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .mat-mdc-menu-ripple,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .mat-mdc-menu-ripple::before,
+    .${DARK_MODE_CLASS} .mat-mdc-menu-item .mat-mdc-menu-ripple::after {
+      background: rgba(114, 143, 201, 0.16) !important;
+      opacity: 1 !important;
+    }
+
+    .${DARK_MODE_CLASS} .list__item_container,
+    .${DARK_MODE_CLASS} .list__item,
+    .${DARK_MODE_CLASS} .message__item {
+      color: #d2def7 !important;
+      background: transparent !important;
+    }
+
+    .${DARK_MODE_CLASS} .list__item_container--hoverable:hover,
+    .${DARK_MODE_CLASS} .list__item--hoverable:hover,
+    .${DARK_MODE_CLASS} .message__item:hover,
+    .${DARK_MODE_CLASS} .list__item--active,
+    .${DARK_MODE_CLASS} .list-item--active,
+    .${DARK_MODE_CLASS} [class*="list__item_container--active"] {
+      background-color: #233047 !important;
+      color: #f3f7ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .list__primary,
+    .${DARK_MODE_CLASS} .list__secondary,
+    .${DARK_MODE_CLASS} .list__tertiary,
+    .${DARK_MODE_CLASS} .list__tertiary-left,
+    .${DARK_MODE_CLASS} .list__tertiary-right,
+    .${DARK_MODE_CLASS} .message__sender-name,
+    .${DARK_MODE_CLASS} .message__subject,
+    .${DARK_MODE_CLASS} .message__date,
+    .${DARK_MODE_CLASS} .credits__element,
+    .${DARK_MODE_CLASS} .navigation-link,
+    .${DARK_MODE_CLASS} .mdc-button__label {
+      color: #c8d9ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .separator,
+    .${DARK_MODE_CLASS} .message__item_container.separator-on-top {
+      border-color: #273551 !important;
+      background: transparent !important;
+    }
+
+    .${DARK_MODE_CLASS} .row.bottom-bordered {
+      border-bottom-color: #25334c !important;
+    }
+
+    .${DARK_MODE_CLASS} .mdc-text-field--filled,
+    .${DARK_MODE_CLASS} .mat-mdc-text-field-wrapper,
+    .${DARK_MODE_CLASS} .mdc-text-field,
+    .${DARK_MODE_CLASS} .mat-mdc-form-field-focus-overlay {
+      background: #1f2430 !important;
+      color: #e0e0e0 !important;
+    }
+
+    .${DARK_MODE_CLASS} input,
+    .${DARK_MODE_CLASS} .mat-mdc-input-element {
+      color: #e0e0e0 !important;
+      caret-color: #8fb4ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .footer {
+      background: #141922 !important;
+      color: #c8d4f0 !important;
+    }
+
+    .${DARK_MODE_CLASS} .footer__version {
+      opacity: 0.92 !important;
+    }
+
+    .${DARK_MODE_CLASS} a,
+    .${DARK_MODE_CLASS} .link,
+    .${DARK_MODE_CLASS} .header__logo,
+    .${DARK_MODE_CLASS} .footer__report {
+      color: #9dc0ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .footer * {
+      color: inherit !important;
+    }
+
+    .${DARK_MODE_CLASS} #${TOGGLE_ID} {
+      border-color: #4c5d7d;
+      color: #e0e0e0;
+    }
+
+    .${DARK_MODE_CLASS} #${TOGGLE_ID}:hover {
+      border-color: #52698b;
+    }
+  `);
+
+  utils.injectCss(`
+    /* === Expansion panel / accordion header hover === */
+    .${DARK_MODE_CLASS} .mat-expansion-panel-header:hover,
+    .${DARK_MODE_CLASS} .mat-expansion-panel-header:focus-visible {
+      background: #1e2938 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-expansion-panel-header::before {
+      background: transparent !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-expansion-panel-header .mat-ripple-element,
+    .${DARK_MODE_CLASS} .mat-expansion-panel-header .mat-expansion-panel-header-ripple {
+      background: rgba(168, 195, 255, 0.1) !important;
+    }
+
+    /* === Message card + list-item hover (role=button rows) === */
+    .${DARK_MODE_CLASS} neptun-message-card:hover .message__item_container,
+    .${DARK_MODE_CLASS} neptun-message-card:focus .message__item_container,
+    .${DARK_MODE_CLASS} .list-item:hover .message__item_container {
+      background: #1e2b3c !important;
+    }
+
+    /* === Text colors for previously-unreadable elements === */
+
+    /* "Tanóra" / list type label */
+    .${DARK_MODE_CLASS} .primary-text,
+    .${DARK_MODE_CLASS} .list__type {
+      color: #7eb8ff !important;
+    }
+
+    /* Pie chart averages widget */
+    .${DARK_MODE_CLASS} .overlay-data,
+    .${DARK_MODE_CLASS} .averages__pie-chart__decimal,
+    .${DARK_MODE_CLASS} .averages__pie-chart__text,
+    .${DARK_MODE_CLASS} .chart-description {
+      color: #d0deff !important;
+    }
+
+    /* Credit count */
+    .${DARK_MODE_CLASS} .credits__count {
+      color: #c8d9ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .credits__element {
+      border-color: #273551 !important;
+    }
+
+    /* Message date label */
+    .${DARK_MODE_CLASS} .message__last-post-date {
+      color: #8295b5 !important;
+    }
+
+    /* Empty / no-data widget states */
+    .${DARK_MODE_CLASS} .empty,
+    .${DARK_MODE_CLASS} .empty p,
+    .${DARK_MODE_CLASS} .no-data__text,
+    .${DARK_MODE_CLASS} [class*="empty"] p {
+      color: #7a8daa !important;
+    }
+
+    .${DARK_MODE_CLASS} .empty i,
+    .${DARK_MODE_CLASS} .no-data__icon {
+      color: #4a6080 !important;
+    }
+
+    /* Badge with white background (#f2f3fb) -> dark */
+    .${DARK_MODE_CLASS} .neptun-badge--background-elements {
+      background-color: #253349 !important;
+      color: #c0d0f0 !important;
+    }
+
+    /* User menu info text */
+    .${DARK_MODE_CLASS} .user-menu__name,
+    .${DARK_MODE_CLASS} .user-menu__code,
+    .${DARK_MODE_CLASS} .user-menu__training,
+    .${DARK_MODE_CLASS} .user-menu__code-training {
+      color: #d6e0f5 !important;
+    }
+
+    .${DARK_MODE_CLASS} .user-menu,
+    .${DARK_MODE_CLASS} .user-menu__block,
+    .${DARK_MODE_CLASS} .user-menu__user-data {
+      align-items: center !important;
+    }
+
+    .${DARK_MODE_CLASS} .user-menu__block {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+    }
+
+    .${DARK_MODE_CLASS} .user-menu__user-data {
+      line-height: 1.25;
+      gap: 4px;
+      overflow: hidden;
+    }
+
+    .${DARK_MODE_CLASS} .user-menu__name,
+    .${DARK_MODE_CLASS} .user-menu__code,
+    .${DARK_MODE_CLASS} .user-menu__training {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 120px;
+    }
+
+    .${DARK_MODE_CLASS} .user-menu__image {
+      flex: 0 0 auto;
+      margin-right: 10px;
+    }
+
+    /* Financial widget text */
+    .${DARK_MODE_CLASS} .finances__debts,
+    .${DARK_MODE_CLASS} .finances__debts-total,
+    .${DARK_MODE_CLASS} .finances__overdue,
+    .${DARK_MODE_CLASS} .finances__overdue-total,
+    .${DARK_MODE_CLASS} .finances__other-debts,
+    .${DARK_MODE_CLASS} .finances__text {
+      color: #c8d9ff !important;
+    }
+
+    /* Scroll arrow buttons in averages widget */
+    .${DARK_MODE_CLASS} .scroll__button {
+      color: #8ab4f8 !important;
+    }
+
+    .${DARK_MODE_CLASS} .navigation-link i.icon-chevron-right,
+    .${DARK_MODE_CLASS} .more-button i.icon-chevron-right,
+    .${DARK_MODE_CLASS} .more-results i.icon-chevron-right,
+    .${DARK_MODE_CLASS} .more-messages i.icon-chevron-right {
+      color: #9dc0ff !important;
+      border-color: #9dc0ff !important;
+    }
+
+    /* General paragraph text inside widgets */
+    .${DARK_MODE_CLASS} .widget p,
+    .${DARK_MODE_CLASS} .mat-expansion-panel p {
+      color: #ccd8ef !important;
+    }
+
+    /* === Dialog & Overlay Styling === */
+    .${DARK_MODE_CLASS} .cdk-overlay-backdrop {
+      background: rgba(0, 0, 0, 0.65) !important;
+    }
+
+    .${DARK_MODE_CLASS} .cdk-global-overlay-wrapper,
+    .${DARK_MODE_CLASS} .cdk-overlay-pane {
+      backdrop-filter: blur(4px);
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container,
+    .${DARK_MODE_CLASS} .mdc-dialog,
+    .${DARK_MODE_CLASS} .mdc-dialog__surface,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-surface {
+      background: #1a212d !important;
+      border-color: #2b3851 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-title,
+    .${DARK_MODE_CLASS} .mdc-dialog__title,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-content,
+    .${DARK_MODE_CLASS} .mdc-dialog__content {
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container h2,
+    .${DARK_MODE_CLASS} .mat-h2 {
+      color: #e8eefc !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-actions,
+    .${DARK_MODE_CLASS} .mdc-dialog__actions {
+      background: #161d28 !important;
+      border-top-color: #2b3851 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-button,
+    .${DARK_MODE_CLASS} .mat-mdc-unelevated-button,
+    .${DARK_MODE_CLASS} .mat-mdc-outlined-button,
+    .${DARK_MODE_CLASS} .mdc-button {
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-button[mat-flat-button],
+    .${DARK_MODE_CLASS} .mat-flat-button {
+      background: #0943d9 !important;
+      color: #ffffff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-button[mat-stroked-button],
+    .${DARK_MODE_CLASS} .mat-stroked-button {
+      border-color: #4f6b96 !important;
+      color: #7eb8ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-button[mat-stroked-button]:hover,
+    .${DARK_MODE_CLASS} .mat-stroked-button:hover {
+      background: rgba(79, 107, 150, 0.12) !important;
+    }
+
+    .${DARK_MODE_CLASS} .neptun-button,
+    .${DARK_MODE_CLASS} .icon.lightgrey {
+      color: #8fa1c4 !important;
+    }
+
+    .${DARK_MODE_CLASS} .neptun-button:hover,
+    .${DARK_MODE_CLASS} .icon.lightgrey:hover {
+      color: #b0c4e3 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-content .overlay-data,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-content h1 {
+      color: #d0deff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-content .content__text,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-content p {
+      color: #c8d9ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .content__description {
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .kuixcustomicon-Big-left-arrow,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .kuixcustomicon-Big-right-arrow,
+    .${DARK_MODE_CLASS} .content__move {
+      color: #7eb8ff !important;
+    }
+  `);
+  ensureFooterStatus();
+}
+
+function waitForAnyElement(selectors, timeoutMs = 20000) {
+  return new Promise(resolve => {
+    const findTarget = () => selectors.map(selector => document.querySelector(selector)).find(Boolean);
+
+    const initial = findTarget();
+    if (initial) {
+      resolve(initial);
+      return;
+    }
+
+    const observer = new MutationObserver(() => {
+      const element = findTarget();
+      if (element) {
+        observer.disconnect();
+        if (timer) {
+          window.clearTimeout(timer);
+        }
+        resolve(element);
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+
+    const timer = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+  });
+}
+
+function mountToggleInto(container) {
+  if (!container || document.getElementById(TOGGLE_ID)) {
+    return;
+  }
+
+  const toggleButton = document.createElement("button");
+  toggleButton.id = TOGGLE_ID;
+  toggleButton.type = "button";
+  toggleButton.title = "NNPU tema valtas";
+
+  toggleButton.addEventListener("click", () => {
+    const darkModeEnabled = document.body && document.body.classList.contains(DARK_MODE_CLASS);
+    setDarkModeState(!darkModeEnabled, true);
+  });
+
+  if (container.matches(".login__header")) {
+    toggleButton.classList.add("nnpu-theme-toggle-login");
+    container.appendChild(toggleButton);
+  } else {
+    toggleButton.classList.add("nnpu-theme-toggle-dashboard");
+    document.body.appendChild(toggleButton);
+  }
+
+  setDarkModeState(document.body && document.body.classList.contains(DARK_MODE_CLASS), false);
+}
+
+async function injectToggle() {
+  const header = await waitForAnyElement(["div.login__header", "header .header__right", "#main-header-right"]);
+  mountToggleInto(header);
+}
+
+function ensureToggleWatcher() {
+  if (toggleWatcher) {
+    return;
+  }
+
+  const observer = new MutationObserver(() => {
+    if (document.getElementById(TOGGLE_ID)) {
+      return;
+    }
+    const container = document.querySelector("div.login__header, header .header__right, #main-header-right");
+    mountToggleInto(container);
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+
+  toggleWatcher = observer;
+}
+
+function initializeLoginDarkMode() {
+  if (!isAngularHallgatoiPage()) {
+    return;
+  }
+
+  applyInitialDarkModeClass();
+  injectStyles();
+  injectToggle();
+  ensureToggleWatcher();
+  ensureFooterStatus();
+
+  new MutationObserver(() => {
+    ensureFooterStatus();
+  }).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+module.exports = {
+  shouldActivate: () => isAngularHallgatoiPage(),
+  runOutsideNeptun: true,
+  initialize: () => {
+    initializeLoginDarkMode();
+  },
+};
+
+/***/ }),
+
+/***/ 413:
+/***/ ((module) => {
+
+const $ = window.jQuery;
+
+// Verify that we are indeed on a Neptun page
+function isNeptunPage() {
+  return document.title.toLowerCase().indexOf("neptun.net") !== -1;
+}
+
+// Returns whether we are on the login page
+function isLoginPage() {
+  return $("td.login_left_side").size() > 0;
+}
+
+// Returns whether we are authenticated
+function isLoggedIn() {
+  return !!getNeptunCode();
+}
+
+// Parses and returns the Neptun code of the current user
+function getNeptunCode() {
+  if ($("#upTraining_topname").size() > 0) {
+    const input = $("#upTraining_topname").text();
+    return input.substring(input.indexOf(" - ") + 3).toUpperCase();
+  }
+}
+
+// Parses and returns the first-level domain of the site
+function getDomain() {
+  const host = location.host.split(".");
+  const tlds = "at co com edu eu gov hu hr info int mil net org ro rs sk si ua uk".split(" ");
+  let domain = "";
+  for (let i = host.length - 1; i >= 0; i--) {
+    domain = `${host[i]}.${domain}`;
+    if (!tlds.includes(host[i])) {
+      return domain.substr(0, domain.length - 1);
+    }
+  }
+}
+
+// Parses and returns the sanitized name of the current training
+function getTraining() {
+  if ($("#lblTrainingName").size() > 0) {
+    return $("#lblTrainingName")
+      .text()
+      .replace(/[^a-zA-Z0-9]/g, "");
+  }
+}
+
+// Returns the ID of the current page
+function getPageId() {
+  const result = /ctrl=([a-zA-Z0-9_]+)/g.exec(window.location.href);
+  return result ? result[1] : null;
+}
+
+// Returns whether the specified ID is the current page
+function isPageId(...ctrls) {
+  return ctrls.includes(getPageId());
+}
+
+// Get the current AJAX grid instance
+function getAjaxInstance(element) {
+  const instanceId = getAjaxInstanceId(element);
+  return instanceId && unsafeWindow[getAjaxInstanceId(element)];
+}
+
+function getAjaxInstanceId(element) {
+  const ajaxGrid = $(element).closest("div[type=ajaxgrid]");
+  return ajaxGrid.size() > 0 && ajaxGrid.first().attr("instanceid");
+}
+
+// Runs a function asynchronously to fix problems in certain cases
+function runAsync(func) {
+  window.setTimeout(func, 0);
+}
+
+// Evaluates code in the page context
+function runEval(source) {
+  const value = typeof source === "function" ? `(${source})();` : source;
+  const script = document.createElement("script");
+  script.setAttribute("type", "application/javascript");
+  script.textContent = value;
+  document.body.appendChild(script);
+  document.body.removeChild(script);
+}
+
+// Reads the value at the provided path in a deeply nested object
+function deepGetProp(o, s) {
+  let c = o;
+  while (s.length) {
+    const n = s.shift();
+    if (!(c instanceof Object && n in c)) {
+      return;
+    }
+    c = c[n];
+  }
+  return c;
+}
+
+// Sets a value at the provided path in a deeply nested object
+function deepSetProp(o, s, v) {
+  let c = o;
+  while (s.length) {
+    const n = s.shift();
+    if (s.length === 0) {
+      if (v === null) {
+        delete c[n];
+      } else {
+        c[n] = v;
+      }
+      return;
+    }
+    if (!(typeof c === "object" && n in c)) {
+      c[n] = new Object();
+    }
+    c = c[n];
+  }
+}
+
+// Injects a style tag into the page
+function injectCss(css) {
+  $("<style></style>").html(css).appendTo("head");
+}
+
+// Waits for an element to appear in asynchronously rendered DOMs.
+function waitForElement(selector, options = {}) {
+  const {
+    root = document,
+    timeoutMs = 15000,
+  } = options;
+
+  return new Promise(resolve => {
+    const initial = root.querySelector(selector);
+    if (initial) {
+      resolve(initial);
+      return;
+    }
+
+    let timeoutId;
+    const observer = new MutationObserver(() => {
+      const element = root.querySelector(selector);
+      if (element) {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        observer.disconnect();
+        resolve(element);
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+
+    timeoutId = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+  });
+}
+
+// Parses a subject code that is in parentheses at the end of a string
+function parseSubjectCode(source) {
+  const str = source.trim();
+  if (str.charAt(str.length - 1) === ")") {
+    let depth = 0;
+    for (let i = str.length - 2; i >= 0; i--) {
+      const c = str.charAt(i);
+      if (depth === 0 && c === "(") {
+        return str.substring(i + 1, str.length - 1);
+      }
+      depth = c === ")" ? depth + 1 : depth;
+      depth = c === "(" && depth > 0 ? depth - 1 : depth;
+    }
+  }
+  return null;
+}
+
+// Returns if the given string stands for a passing grade
+function isPassingGrade(str) {
+  return [
+    "jeles",
+    "excellent",
+    "jó",
+    "good",
+    "közepes",
+    "satisfactory",
+    "elégséges",
+    "pass",
+    "kiválóan megfelelt",
+    "excellent",
+    "megfelelt",
+    "average",
+  ].some(function (item) {
+    return str.toLowerCase().indexOf(item) !== -1;
+  });
+}
+
+// Returns if the given string stands for a failing grade
+function isFailingGrade(str) {
+  return [
+    "elégtelen",
+    "fail",
+    "nem felelt meg",
+    "unsatisfactory",
+    "nem jelent meg",
+    "did not attend",
+    "nem vizsgázott",
+    "did not attend",
+  ].some(function (item) {
+    return str.toLowerCase().indexOf(item) !== -1;
+  });
+}
+
+module.exports = {
+  isNeptunPage,
+  isLoginPage,
+  isLoggedIn,
+  getNeptunCode,
+  getDomain,
+  getTraining,
+  getPageId,
+  isPageId,
+  getAjaxInstance,
+  getAjaxInstanceId,
+  runAsync,
+  runEval,
+  deepGetProp,
+  deepSetProp,
+  injectCss,
+  waitForElement,
+  parseSubjectCode,
+  isPassingGrade,
+  isFailingGrade,
+};
+
+
+/***/ })
+
+/******/ 	});
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	var __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
+/******/ 	
+/************************************************************************/
+const utils = __webpack_require__(413);
+/*
+const storage = require("./storage");
+*/
+
+const modules = [
+  // Login page
+  __webpack_require__(793),
   /*
-   A JavaScript implementation of the SHA family of hashes, as
-   defined in FIPS PUB 180-2 as well as the corresponding HMAC implementation
-   as defined in FIPS PUB 198a
-
-   Copyright Brian Turek 2008-2013
-   Distributed under the BSD License
-   See http://caligatio.github.com/jsSHA/ for more information
-
-   Several functions taken from Paul Johnston
+  require("./modules/autoLogin"),
+  require("./modules/loginRetry"),
   */
-  (function(B){function r(a,c,b){var f=0,e=[0],g="",h=null,g=b||"UTF8";if("UTF8"!==g&&"UTF16"!==g)throw"encoding must be UTF8 or UTF16";if("HEX"===c){if(0!==a.length%2)throw"srcString of HEX type must be in byte increments";h=u(a);f=h.binLen;e=h.value}else if("ASCII"===c||"TEXT"===c)h=v(a,g),f=h.binLen,e=h.value;else if("B64"===c)h=w(a),f=h.binLen,e=h.value;else throw"inputFormat must be HEX, TEXT, ASCII, or B64";this.getHash=function(a,c,b,g){var h=null,d=e.slice(),l=f,m;3===arguments.length?"number"!==
-  typeof b&&(g=b,b=1):2===arguments.length&&(b=1);if(b!==parseInt(b,10)||1>b)throw"numRounds must a integer >= 1";switch(c){case "HEX":h=x;break;case "B64":h=y;break;default:throw"format must be HEX or B64";}if("SHA-224"===a)for(m=0;m<b;m++)d=q(d,l,a),l=224;else if("SHA-256"===a)for(m=0;m<b;m++)d=q(d,l,a),l=256;else throw"Chosen SHA variant is not supported";return h(d,z(g))};this.getHMAC=function(a,b,c,h,k){var d,l,m,n,A=[],s=[];d=null;switch(h){case "HEX":h=x;break;case "B64":h=y;break;default:throw"outputFormat must be HEX or B64";
-  }if("SHA-224"===c)l=64,n=224;else if("SHA-256"===c)l=64,n=256;else throw"Chosen SHA variant is not supported";if("HEX"===b)d=u(a),m=d.binLen,d=d.value;else if("ASCII"===b||"TEXT"===b)d=v(a,g),m=d.binLen,d=d.value;else if("B64"===b)d=w(a),m=d.binLen,d=d.value;else throw"inputFormat must be HEX, TEXT, ASCII, or B64";a=8*l;b=l/4-1;l<m/8?(d=q(d,m,c),d[b]&=4294967040):l>m/8&&(d[b]&=4294967040);for(l=0;l<=b;l+=1)A[l]=d[l]^909522486,s[l]=d[l]^1549556828;c=q(s.concat(q(A.concat(e),a+f,c)),a+n,c);return h(c,
-  z(k))}}function v(a,c){var b=[],f,e=[],g=0,h;if("UTF8"===c)for(h=0;h<a.length;h+=1)for(f=a.charCodeAt(h),e=[],2048<f?(e[0]=224|(f&61440)>>>12,e[1]=128|(f&4032)>>>6,e[2]=128|f&63):128<f?(e[0]=192|(f&1984)>>>6,e[1]=128|f&63):e[0]=f,f=0;f<e.length;f+=1)b[g>>>2]|=e[f]<<24-g%4*8,g+=1;else if("UTF16"===c)for(h=0;h<a.length;h+=1)b[g>>>2]|=a.charCodeAt(h)<<16-g%4*8,g+=2;return{value:b,binLen:8*g}}function u(a){var c=[],b=a.length,f,e;if(0!==b%2)throw"String of HEX type must be in byte increments";for(f=0;f<
-  b;f+=2){e=parseInt(a.substr(f,2),16);if(isNaN(e))throw"String of HEX type contains invalid characters";c[f>>>3]|=e<<24-f%8*4}return{value:c,binLen:4*b}}function w(a){var c=[],b=0,f,e,g,h,k;if(-1===a.search(/^[a-zA-Z0-9=+\/]+$/))throw"Invalid character in base-64 string";f=a.indexOf("=");a=a.replace(/\=/g,"");if(-1!==f&&f<a.length)throw"Invalid '=' found in base-64 string";for(e=0;e<a.length;e+=4){k=a.substr(e,4);for(g=h=0;g<k.length;g+=1)f="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".indexOf(k[g]),
-  h|=f<<18-6*g;for(g=0;g<k.length-1;g+=1)c[b>>2]|=(h>>>16-8*g&255)<<24-b%4*8,b+=1}return{value:c,binLen:8*b}}function x(a,c){var b="",f=4*a.length,e,g;for(e=0;e<f;e+=1)g=a[e>>>2]>>>8*(3-e%4),b+="0123456789abcdef".charAt(g>>>4&15)+"0123456789abcdef".charAt(g&15);return c.outputUpper?b.toUpperCase():b}function y(a,c){var b="",f=4*a.length,e,g,h;for(e=0;e<f;e+=3)for(h=(a[e>>>2]>>>8*(3-e%4)&255)<<16|(a[e+1>>>2]>>>8*(3-(e+1)%4)&255)<<8|a[e+2>>>2]>>>8*(3-(e+2)%4)&255,g=0;4>g;g+=1)b=8*e+6*g<=32*a.length?b+
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".charAt(h>>>6*(3-g)&63):b+c.b64Pad;return b}function z(a){var c={outputUpper:!1,b64Pad:"="};try{a.hasOwnProperty("outputUpper")&&(c.outputUpper=a.outputUpper),a.hasOwnProperty("b64Pad")&&(c.b64Pad=a.b64Pad)}catch(b){}if("boolean"!==typeof c.outputUpper)throw"Invalid outputUpper formatting option";if("string"!==typeof c.b64Pad)throw"Invalid b64Pad formatting option";return c}function k(a,c){return a>>>c|a<<32-c}function I(a,c,b){return a&
-  c^~a&b}function J(a,c,b){return a&c^a&b^c&b}function K(a){return k(a,2)^k(a,13)^k(a,22)}function L(a){return k(a,6)^k(a,11)^k(a,25)}function M(a){return k(a,7)^k(a,18)^a>>>3}function N(a){return k(a,17)^k(a,19)^a>>>10}function O(a,c){var b=(a&65535)+(c&65535);return((a>>>16)+(c>>>16)+(b>>>16)&65535)<<16|b&65535}function P(a,c,b,f){var e=(a&65535)+(c&65535)+(b&65535)+(f&65535);return((a>>>16)+(c>>>16)+(b>>>16)+(f>>>16)+(e>>>16)&65535)<<16|e&65535}function Q(a,c,b,f,e){var g=(a&65535)+(c&65535)+(b&
-  65535)+(f&65535)+(e&65535);return((a>>>16)+(c>>>16)+(b>>>16)+(f>>>16)+(e>>>16)+(g>>>16)&65535)<<16|g&65535}function q(a,c,b){var f,e,g,h,k,q,r,C,u,d,l,m,n,A,s,p,v,w,x,y,z,D,E,F,G,t=[],H,B=[1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,
-  3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298];d=[3238371032,914150663,812702999,4144912697,4290775857,1750603025,1694076839,3204075428];f=[1779033703,3144134277,1013904242,
-  2773480762,1359893119,2600822924,528734635,1541459225];if("SHA-224"===b||"SHA-256"===b)l=64,A=16,s=1,G=Number,p=O,v=P,w=Q,x=M,y=N,z=K,D=L,F=J,E=I,d="SHA-224"===b?d:f;else throw"Unexpected error in SHA-2 implementation";a[c>>>5]|=128<<24-c%32;a[(c+65>>>9<<4)+15]=c;H=a.length;for(m=0;m<H;m+=A){c=d[0];f=d[1];e=d[2];g=d[3];h=d[4];k=d[5];q=d[6];r=d[7];for(n=0;n<l;n+=1)t[n]=16>n?new G(a[n*s+m],a[n*s+m+1]):v(y(t[n-2]),t[n-7],x(t[n-15]),t[n-16]),C=w(r,D(h),E(h,k,q),B[n],t[n]),u=p(z(c),F(c,f,e)),r=q,q=k,k=
-  h,h=p(g,C),g=e,e=f,f=c,c=p(C,u);d[0]=p(c,d[0]);d[1]=p(f,d[1]);d[2]=p(e,d[2]);d[3]=p(g,d[3]);d[4]=p(h,d[4]);d[5]=p(k,d[5]);d[6]=p(q,d[6]);d[7]=p(r,d[7])}if("SHA-224"===b)a=[d[0],d[1],d[2],d[3],d[4],d[5],d[6]];else if("SHA-256"===b)a=d;else throw"Unexpected error in SHA-2 implementation";return a}"function"===typeof define&&typeof define.amd?define(function(){return r}):"undefined"!==typeof exports?"undefined"!==typeof module&&module.exports?module.exports=exports=r:exports=r:B.jsSHA=r})(npu);
+  __webpack_require__(660),
 
-  /* Run the script */
-  npu.init();
+  /*
+  // Automatic redirect to the last visited page
+  require("./modules/backToLastPage"),
+
+  // All authenticated pages
+  require("./modules/hideHeader"),
+  require("./modules/pageTitle"),
+  require("./modules/mainMenuFixes"),
+  require("./modules/termSelectorFixes"),
+  require("./modules/paginationFixes"),
+  require("./modules/officialMessageAlert"),
+  require("./modules/hideSurveyPopup"),
+  require("./modules/infiniteSession"),
+  require("./modules/loadingIndicator"),
+
+  // Timetable page
+  require("./modules/timetableFixes"),
+
+  // Markbook page
+  require("./modules/markListFixes"),
+
+  // Advance page
+  require("./modules/advanceListFixes"),
+
+  // Course signup page
+  require("./modules/courseListFixes"),
+  require("./modules/courseAutoList"),
+  require("./modules/courseStore"),
+
+  // Exams page
+  require("./modules/examListFixes"),
+
+  // Signed exams page
+  require("./modules/signedExamListFixes"),
+  */
+];
+
+(async () => {
+  /*
+  await storage.initialize();
+  */
+
+  modules.forEach(module => {
+    if (module.shouldActivate() && (utils.isNeptunPage() || module.runOutsideNeptun)) {
+      module.initialize();
+    }
+  });
 })();
+
+/******/ })()
+;

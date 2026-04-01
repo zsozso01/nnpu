@@ -16,11 +16,30 @@ Külön köszönet jár az eredeti projektnek és fenntartójának: [github.com/
 
 ## Legújabb verzió
 
-* Legfrissebb verzió: **2.6.1**
-* Kiadás dátuma: **2026. április 1.**
+* Legfrissebb verzió: **2.6.2**
+* Kiadás dátuma: **2026. április 2.**
 
 Ha tudod, mit csinálsz, [kattints ide a telepítéshez](https://github.com/zsozso01/nnpu/releases/latest/download/npu.user.js).<br>
 Egyébként olvasd el lent a telepítési útmutatót.
+
+## 2.6.2 kiadási állapot
+
+Ez a kiadás az Angular-alapú felület **stabilizálására és olvashatóságára** fókuszál.
+
+### Aktív Angular funkciók ebben a verzióban
+
+* 🌙 **Kapcsolható sötét mód** a login és dashboard oldalon
+* 🔘 **Perzisztens sötét/világos mód váltó gomb** (állapot mentése böngészőben)
+* 📰 **Login olvashatósági javítások**: Hírek, Letölthető dokumentumok, Hasznos linkek, nyelvválasztó
+* 🧱 **Dashboard vizuális javítások**: egységes háttérfelületek, fejléc-árnyék eltávolítás, olvasható lista- és menüszínek
+* 🛟 **Automatikus Angular betöltési helyreállítás** beragadt loading állapot esetén
+
+### Fontos állapotjelzés
+
+A korábbi, klasszikus NPU-funkciók jelentős része jelenleg még **legacy módban**, fokozatos visszavezetés alatt áll. Emiatt a lenti „Mit tud?” szekció egyszerre tartalmaz:
+
+* jelenleg is működő funkciókat,
+* valamint történeti/tervezett funkciókat, amelyek visszaépítése még folyamatban van.
 
 ## Telepítés
 
@@ -108,12 +127,24 @@ A Neptun fejléce alapesetben a képernyő harmadát elfoglalja, ami kis képern
 
 Eleged van abból, hogy minden egyes alkalommal be kell állítanod, hogy 500 elemet akarsz látni egy oldalon a 20 helyett? A Neptun PowerUp! automatikusan 500 elemet jelenít meg minden listában, és eltünteti az oldalméret-választó menüt.
 
+#### Automatikus Angular betöltési helyreállítás
+
+Ha az új Neptun Angular felülete beragad a “Tartalom betöltése” állapotban, az NNPU automatikusan visszanavigál a tiszta `/hallgatoi/` gyökéroldalra. A szkript nem áll meg néhány próbálkozás után: rövid szüneteket tartva újra és újra megpróbálja helyreállítani az oldalt, hogy közben a szervert se terhelje feleslegesen.
+
 ## Újdonságok
+
+#### 2026. április 2.
+
+* **Javítva:** A login oldal sötét módban teljes körűen olvashatóbb lett (Hírek, Letölthető dokumentumok, Hasznos linkek, nyelvválasztó elemek).
+* **Javítva:** A dashboard sötét téma stabilizálva lett (egységes háttérfelületek, fejlécárnyék eltávolítása, menü/lista kiemelések konzisztenciája).
+* **Javítva:** A sötét mód váltógomb tartósan visszaállításra került login és dashboard nézetben is.
+* **Fejlődés:** A route-aktiválási logika pontosítva lett, így az Angular SPA navigáció után is konzisztensen betöltődik a megfelelő téma.
 
 #### 2026. április 1.
 
 * **Újdonság:** A projekt mostantól New Neptun PowerUp néven, új karbantartás alatt fejlődik tovább az Angular-alapú Neptun felület támogatására.
 * **Újdonság:** A bejelentkezési oldalon mostantól jól látható NNPU aktivitásjelző jelenik meg, valamint a footer verziószöveg is kiegészül.
+* **Újdonság:** Az Angular-alapú felületen a beragadt “Tartalom betöltése” állapot észlelésekor a szkript automatikusan visszanavigál a tiszta `/hallgatoi/` gyökéroldalra, és rövid szünetekkel addig próbálkozik tovább, amíg az oldal helyre nem áll.
 * **Fejlődés:** A dokumentáció frissült az új fejlesztési iránnyal, a hibabejelentési folyamattal és az eredeti projekt megérdemelt elismerésével.
 
 #### 2024. augusztus 23.
@@ -355,6 +386,8 @@ Eleged van abból, hogy minden egyes alkalommal be kell állítanod, hogy 500 el
 
 Az alábbiakban azok a tervezett fejlesztések szerepelnek, amelyek az Angular-alapú Neptun felület teljes körű támogatásához szükségesek vagy a felhasználói élményt számottevően javítanák. A lista a fejlesztési prioritásoknak megfelelően van rendezve; bárki szívesen látott közreműködő.
 
+Megjegyzés: a régi NPU forkból örökölt legacy funkciók jelenleg ideiglenesen le vannak tiltva az Angular SPA átállás idejére. Ennek célja, hogy a túl agresszív háttérhívások, UI-injektálások és polling logikák ne váltsanak ki szerveroldali rate limitinget, CORS redirect blokkokat vagy MIME-típus hibákat, amíg az új felülethez célzottan, egyenként építjük vissza őket.
+
 ### Alapvető javítások
 
 - [ ] **Munkamenet-kezelés javítása** — A 10 perces session-timeout és a belőle eredő 401-es hibák kezelése a `GetNewTokens` API-végpont automatikus, háttérben futó meghívásával, hogy a szkript a tokenek lejárta előtt proaktívan megújítsa azokat.
@@ -370,9 +403,36 @@ Az alábbiakban azok a tervezett fejlesztések szerepelnek, amelyek az Angular-a
 
 - [ ] **Órarend-tervező takarítás** — A vizuális zaj csökkentése az órarend-tervezőben: egy kibontott tárgy esetén a nem kiválasztott kurzusok automatikus elrejtése, hogy csak a releváns lehetőségek látszódjanak.
 - [ ] **Főmenü optimalizálása** — A kedvencnek jelölt menüpontok kiemelése a hamburger-menüből közvetlenül a felső navigációs sávba; a szülőkategóriákra (pl. _Tárgyak_, _Vizsgák_) kattintva automatikus navigálás az alapértelmezett aloldalra.
-- [ ] **🌙 Sötét mód _(új egyedi funkció)_** — Teljes körű, kapcsolható sötét téma injektálása az Angular SPA-ba: egyedi CSS-réteg, amely az egész felületet lefedi, és amelynek állapota gépenként mentésre kerül — nem a Neptun beépített funkciója, hanem az NNPU saját kiegészítése.
+- [x] **🌙 Sötét mód _(új egyedi funkció)_** — Teljes körű, kapcsolható sötét téma injektálása az Angular SPA-ba: mind a bejelentkezési oldal, mind a hallgatoi dashboard teljesen sötét módban használható. Egyedi CSS-réteg, amely az egész felületet lefedi, és amelynek állapota gépenként mentésre kerül — nem a Neptun beépített funkciója, hanem az NNPU saját kiegészítése.
+
+### Legacy funkciók visszahozása, egyenként
+
+- [ ] **Órarendi vizuális zaj csökkentése** — Az órarend nézetben a nem kiválasztott kurzusok automatikus elrejtése, hogy a kibontott tárgyaknál csak a releváns elemek maradjanak láthatók.
+- [ ] **1 kattintásos tárgyfelvétel visszaállítása** — A régi tárgyfelvételi gyorsítás újraimplementálása és fokozatos tesztelése az Angular felületen.
+- [ ] **Automatikus munkamenet-életben tartás visszaállítása** — A `GetNewTokens` alapú keep-alive logika biztonságos, rate-limit barát visszavezetése.
+- [ ] **2FA megkerülés / automatikus belépés visszaállítása** — A régi auto-login viselkedés kontrollált, külön tesztelhető visszahozása.
+- [ ] **Szerverkapacitás-figyelés visszaállítása** — A régi kapacitásfigyelő és elérhetőségi logika újratesztelése, csak célzott és visszafogott hálózati mintával.
 
 ---
+
+## Kiadási ellenőrzőlista
+
+Az alábbi lista segít, hogy a GitHub Release publikálás előtt minden szükséges lépés megtörténjen:
+
+1. Verzió ellenőrzése a [package.json](package.json), [src/meta.txt](src/meta.txt) és a generált [npu.user.js](npu.user.js) fájlokban.
+2. Build futtatása: `npm run build`.
+3. Gyors manuális ellenőrzés:
+    * login oldal (sötét mód + váltógomb + Hírek/Dokumentumok/Linkek/nyelvválasztó)
+    * dashboard oldal (sötét mód + fejléc + widget/lista kiemelések + váltógomb)
+4. Release asset feltöltése: a frissen generált `npu.user.js`.
+5. GitHub release leírásba a „2026. április 2.” pontok bemásolása az „Újdonságok” szekcióból.
+
+## Fejlesztői gyorsstart
+
+* Függőségek telepítése: `npm install`
+* Fejlesztői watch mód: `npm run start`
+* Build: `npm run build`
+* Ellenőrzés: `npm run verify`
 
 ## Közreműködők
 
