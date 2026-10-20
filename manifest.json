@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "New Neptun PowerUp",
+  "version": "2.6.1",
+  "description": "New Neptun PowerUp (NNPU) – Angular Neptun kiegészítő böngészőbővítmény",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "nnpu@zsozso01.github.io",
+      "strict_min_version": "109.0"
+    }
+  },
+  "icons": {}
+}

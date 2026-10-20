@@ -826,6 +826,80 @@ function injectDashboardStyles() {
       color: #c8d9ff !important;
     }
 
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .dialog-container,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .basic-dialog-content,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .basic-dialog-content.tags,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .dialog-filter-container,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .content {
+      background: transparent !important;
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .mat-mdc-dialog-content,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .mat-dialog-content,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .dialog-container,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .dialog-filter-container,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .basic-dialog-content,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .basic-dialog-content.tags,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .content,
+    .${DARK_MODE_CLASS} .cdk-overlay-container .mat-mdc-dialog-container .content__description {
+      background: #161d28 !important;
+      background-color: #161d28 !important;
+      background-image: none !important;
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .close,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .close__container {
+      background: transparent !important;
+      border-color: #2b3851 !important;
+      color: #b7c8e8 !important;
+      box-shadow: none !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .close__container:hover,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container #basic-dialog-close-button:hover {
+      background: #223049 !important;
+      color: #e7efff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .chart,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container neptun-semi-pie-chart,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .overlay-data,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .chart-description {
+      color: #d0deff !important;
+      background: transparent !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .arcs__background-arc {
+      fill: #243349 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .arcs__main-arc {
+      fill: #00d3a0 !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .content__description,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .content__text,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .mat-h2,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container h2,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container h1 {
+      color: #dbe6ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .mdc-button--outlined,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .mat-mdc-outlined-button {
+      border-color: #4f6b96 !important;
+      background: transparent !important;
+      color: #8fc0ff !important;
+    }
+
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .mdc-button--outlined:hover,
+    .${DARK_MODE_CLASS} .mat-mdc-dialog-container .mat-mdc-outlined-button:hover {
+      background: rgba(79, 107, 150, 0.16) !important;
+      color: #dbe6ff !important;
+    }
+
     .${DARK_MODE_CLASS} .content__description {
       color: #dbe6ff !important;
     }
